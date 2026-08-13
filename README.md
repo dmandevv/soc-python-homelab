@@ -64,9 +64,11 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 
 | Part | ~CAD | Why it's needed |
 |------|------|-----------------|
-| Dell RAM top-up to **64GB** (if you bought 32GB) | $60–80 | The Wazuh SIEM's indexer is memory-hungry and must coexist with your other services. |
+| ~~Dell RAM top-up to 64GB~~ — **NOT POSSIBLE, see flag below** | — | The OptiPlex 7070 Micro's board caps at 32GB total (2 slots × 16GB max/slot) — already maxed out from the Phase 0 purchase. No upgrade path exists on this hardware. |
 | Analyst workstation — your **existing desktop** | $0 | SIEM dashboards and investigations want a real screen/keyboard. Same room as the lab; also your out-of-band recovery box. |
 | *(optional)* 2.5G USB NIC (RTL8156) for the Dell | $20 | Faster trunk / second interface as telemetry and traffic grow. |
+
+> **⚠️ Flagged 2026-08-13 — Phase 3 RAM constraint:** the original plan assumed a 64GB RAM upgrade for Wazuh, but the Dell's board hard-caps at 32GB total, and it's already there. Wazuh will have to run within whatever's left of that same fixed 32GB, shared with the website VM and (per the Phase 1 firewall-consolidation decision — OPNsense virtualized on this same Dell rather than a separate appliance) OPNsense + Suricata too. Rough budget: ~4GB for OPNsense+Suricata, ~1-2GB for the website VM, leaving ~24-26GB for Wazuh + Proxmox overhead — likely enough for a constrained single-node deployment (smaller indices, shorter retention), but with less headroom than originally planned. Revisit before starting Phase 3, with three options: (1) accept a more constrained Wazuh config, (2) give Wazuh its own separate hardware, breaking from full consolidation, or (3) check whether this specific board unofficially supports more than 32GB (undocumented, would need community verification first).
 
 **Software (free):** Wazuh SIEM (VM); Wazuh agents on VMs/LXCs + desktop; a Windows VM with Sysmon; an isolated **sandbox** (spare firewall port → REMnux/FLARE-VM); Atomic Red Team; MITRE ATT&CK-mapped triage. Stretch: Zeek (SPAN port), Volatility (memory forensics).
 
