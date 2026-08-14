@@ -31,11 +31,20 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 
 | Part | ~CAD | Why it's needed |
 |------|------|-----------------|
-| Firewall — 6-port Intel **i3-N305** mini-PC, 16GB, 256GB NVMe (Intel **i226-V** NICs) | $520 | Your router, VLAN gateway, and edge. Runs OPNsense; 6 ports leave room for a 2nd WAN and an isolated sandbox port later. |
+| ~~Dedicated firewall appliance~~ | ~~$520~~ | **Cut 2026-08-13** — see firewall approach below. |
 | Managed switch — **MikroTik CRS326-24G-2S+IN** (24× 1GbE + 2× 10G SFP+, fanless) | $200 | VLANs (802.1Q), trunk/access ports, and RouterOS CLI practice. SFP+ ports wait for a future NAS. |
-| Cat6 cabling | — | Already covered by the Phase 0 buy-once set; the short table runs get used here (firewall ↔ switch ↔ Dell). |
+| Cat6 cabling | — | Already covered by the Phase 0 buy-once set; the short table runs get used here (switch ↔ Dell). |
 
-**Software (free):** OPNsense (WAN/LAN, VLANs 10/20/30/40/99, DHCP, DNS); RouterOS on the switch (trunk + access ports).
+**Firewall approach (decided 2026-08-13):** OPNsense runs as a **VM on the Dell** (NFV — virtualizing what would traditionally be a dedicated appliance, using the hypervisor already stood up in Phase 0) instead of a separate physical box. The Dell only has one onboard NIC, so **WAN and LAN both ride the same physical link as tagged VLANs** — no second NIC needed at all:
+- MikroTik port facing the XB6 (WAN) is configured as an **access port** on a dedicated WAN VLAN (e.g. VLAN 99) — the switch tags the XB6's plain untagged traffic as it enters.
+- MikroTik port facing the Dell is a **trunk port**, carrying the WAN VLAN plus all internal VLANs (10/20/30/40) together.
+- OPNsense reads the trunk over the Dell's single NIC and creates a sub-interface per VLAN tag, treating the WAN VLAN's sub-interface as its actual WAN interface.
+
+Chosen over buying a dedicated 6-port appliance (~$520-685 across several options researched — Kikusenko/KETUOPU N305 boxes, CWWK U300, MinisForum MS-01, Lenovo M720q) specifically for the NFV/resource-tuning learning experience and lower cost. Known tradeoff accepted: firewall/internet goes down whenever the Dell reboots for unrelated reasons (website VM work, Proxmox updates, etc.).
+
+> **⚠️ Flag — verify VLAN isolation is actually enforced before trusting this setup.** WAN and LAN now share one physical cable, separated only by VLAN tags rather than genuinely separate wires — this is normally adequate, but it's worth actively testing rather than assuming it's correct, given VLAN hopping (double-tagging, switch spoofing) is a real attack category. Before treating Phase 1 as done: confirm the WAN VLAN cannot reach internal VLANs and vice versa (try pinging/scanning across them from both directions), confirm the native VLAN isn't left as the default VLAN 1 (a known VLAN-hopping vector), and confirm OPNsense's WAN interface has no route back into LAN-side VLANs except through its own firewall rules. Don't skip this just because the switch config "looks right."
+
+**Software (free):** OPNsense (WAN/LAN, VLANs 10/20/30/40/99, DHCP, DNS) as a VM on the Dell; RouterOS on the switch (trunk + access ports).
 
 **Note on the XB6 & Wi-Fi:** you can keep the XB6 **un-bridged (double-NAT)** through the early phases so the house keeps its Wi-Fi — VLANs still work fine behind it. Switch the XB6 to **bridge mode** later (in Phase 4), when you add your own access point — because bridging turns the XB6's Wi-Fi off.
 
