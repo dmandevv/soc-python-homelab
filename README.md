@@ -33,7 +33,7 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 |------|------|-----------------|
 | ~~Dedicated firewall appliance~~ | ~~$520~~ | **Cut 2026-08-13** — see firewall approach below. |
 | Managed switch — **MikroTik CRS326-24G-2S+IN** (24× 1GbE + 2× 10G SFP+, fanless) | $200 | VLANs (802.1Q), trunk/access ports, and RouterOS CLI practice. SFP+ ports wait for a future NAS. **Bought.** |
-| USB-to-Ethernet adapter (**Realtek RTL8153/RTL8156** chipset — NOT ASIX AX88179, confirmed broken on OPNsense) | ~$15-30 | Gives the Dell a genuine second NIC dedicated to WAN — see firewall approach below. |
+| USB-to-Ethernet adapter — **Realtek RTL8156BG** (USB 3.0 Type-A), NOT ASIX AX88179 (confirmed broken on OPNsense) | ~$15-30 | Gives the Dell a genuine second NIC dedicated to WAN — see firewall approach below. Chipset verified supported by FreeBSD's `ure` driver by name. **Bought.** |
 | Cat6 cabling | — | Already covered by the Phase 0 buy-once set; the short table runs get used here (switch ↔ Dell). |
 
 **Firewall approach (updated 2026-08-13):** OPNsense runs as a **VM on the Dell** (NFV — virtualizing what would traditionally be a dedicated appliance, using the hypervisor already stood up in Phase 0) instead of a separate physical box. Two-tier plan, cheap to try, easy to fall back:
