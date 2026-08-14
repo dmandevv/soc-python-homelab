@@ -32,17 +32,26 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 | Part | ~CAD | Why it's needed |
 |------|------|-----------------|
 | ~~Dedicated firewall appliance~~ | ~~$520~~ | **Cut 2026-08-13** — see firewall approach below. |
-| Managed switch — **MikroTik CRS326-24G-2S+IN** (24× 1GbE + 2× 10G SFP+, fanless) | $200 | VLANs (802.1Q), trunk/access ports, and RouterOS CLI practice. SFP+ ports wait for a future NAS. |
+| Managed switch — **MikroTik CRS326-24G-2S+IN** (24× 1GbE + 2× 10G SFP+, fanless) | $200 | VLANs (802.1Q), trunk/access ports, and RouterOS CLI practice. SFP+ ports wait for a future NAS. **Bought.** |
+| USB-to-Ethernet adapter (**Realtek RTL8153/RTL8156** chipset — NOT ASIX AX88179, confirmed broken on OPNsense) | ~$15-30 | Gives the Dell a genuine second NIC dedicated to WAN — see firewall approach below. |
 | Cat6 cabling | — | Already covered by the Phase 0 buy-once set; the short table runs get used here (switch ↔ Dell). |
 
-**Firewall approach (decided 2026-08-13):** OPNsense runs as a **VM on the Dell** (NFV — virtualizing what would traditionally be a dedicated appliance, using the hypervisor already stood up in Phase 0) instead of a separate physical box. The Dell only has one onboard NIC, so **WAN and LAN both ride the same physical link as tagged VLANs** — no second NIC needed at all:
+**Firewall approach (updated 2026-08-13):** OPNsense runs as a **VM on the Dell** (NFV — virtualizing what would traditionally be a dedicated appliance, using the hypervisor already stood up in Phase 0) instead of a separate physical box. Two-tier plan, cheap to try, easy to fall back:
+
+**Primary plan — try the Realtek USB adapter for a genuine second NIC:**
+- Onboard NIC = LAN trunk to the switch (all internal VLANs 10/20/30/40).
+- USB NIC = dedicated WAN interface, plugged straight into the XB6 — WAN traffic never touches the switch at all.
+- Why this is worth the small extra cost: without a second NIC, WAN traffic would have to pass through the switch (tagged as a VLAN) before ever reaching the firewall — the switch becomes WAN-adjacent attack surface instead of purely internal-facing. A real, if modest, security tradeoff. The USB adapter is cheap enough that closing this gap is worth trying first.
+
+**Fallback plan — if the USB adapter proves unreliable, use VLAN tagging on the single onboard NIC instead:**
 - MikroTik port facing the XB6 (WAN) is configured as an **access port** on a dedicated WAN VLAN (e.g. VLAN 99) — the switch tags the XB6's plain untagged traffic as it enters.
-- MikroTik port facing the Dell is a **trunk port**, carrying the WAN VLAN plus all internal VLANs (10/20/30/40) together.
+- MikroTik port facing the Dell is a **trunk port**, carrying the WAN VLAN plus all internal VLANs together.
 - OPNsense reads the trunk over the Dell's single NIC and creates a sub-interface per VLAN tag, treating the WAN VLAN's sub-interface as its actual WAN interface.
+- **If falling back to this plan**, the switch is WAN-adjacent, so: keep RouterOS patched, and treat the VLAN isolation flag below as mandatory, not optional.
 
-Chosen over buying a dedicated 6-port appliance (~$520-685 across several options researched — Kikusenko/KETUOPU N305 boxes, CWWK U300, MinisForum MS-01, Lenovo M720q) specifically for the NFV/resource-tuning learning experience and lower cost. Known tradeoff accepted: firewall/internet goes down whenever the Dell reboots for unrelated reasons (website VM work, Proxmox updates, etc.).
+Chosen over buying a dedicated 6-port appliance (~$520-685 across several options researched — Kikusenko/KETUOPU N305 boxes, CWWK U300, MinisForum MS-01, Lenovo M720q) specifically for the NFV/resource-tuning learning experience and lower cost. Known tradeoff accepted either way: firewall/internet goes down whenever the Dell reboots for unrelated reasons (website VM work, Proxmox updates, etc.).
 
-> **⚠️ Flag — verify VLAN isolation is actually enforced before trusting this setup.** WAN and LAN now share one physical cable, separated only by VLAN tags rather than genuinely separate wires — this is normally adequate, but it's worth actively testing rather than assuming it's correct, given VLAN hopping (double-tagging, switch spoofing) is a real attack category. Before treating Phase 1 as done: confirm the WAN VLAN cannot reach internal VLANs and vice versa (try pinging/scanning across them from both directions), confirm the native VLAN isn't left as the default VLAN 1 (a known VLAN-hopping vector), and confirm OPNsense's WAN interface has no route back into LAN-side VLANs except through its own firewall rules. Don't skip this just because the switch config "looks right."
+> **⚠️ Flag — verify VLAN isolation is actually enforced, regardless of which plan you end up on.** If on the fallback (single-NIC) plan, WAN and LAN share one physical cable, separated only by VLAN tags — this is normally adequate, but worth actively testing rather than assuming correct, given VLAN hopping (double-tagging, switch spoofing) is a real attack category. Before treating Phase 1 as done: confirm the WAN VLAN cannot reach internal VLANs and vice versa (try pinging/scanning across them from both directions), confirm the native VLAN isn't left as the default VLAN 1 (a known VLAN-hopping vector), and confirm OPNsense's WAN interface has no route back into LAN-side VLANs except through its own firewall rules. Don't skip this just because the switch config "looks right."
 
 **Software (free):** OPNsense (WAN/LAN, VLANs 10/20/30/40/99, DHCP, DNS) as a VM on the Dell; RouterOS on the switch (trunk + access ports).
 
