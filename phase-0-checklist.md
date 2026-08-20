@@ -96,4 +96,4 @@ Goal: portfolio site live at your domain, served from containers, on the Dell ru
 
 Portfolio live at your domain, served from a container, on a hypervisor you'll build every later phase on top of.
 
-**Next:** Phase 1 — Network foundation (Network+): OPNsense firewall, MikroTik managed switch, VLANs. The website you just stood up moves onto that network once it exists.
+**Next:** Phase 1 — Network foundation (Network+): the MikroTik CRS326 running RouterOS as switch, router, and firewall in one, with VLANs 10/20/30/40 behind it. The website you just stood up moves onto that network once it exists.
