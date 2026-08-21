@@ -16,17 +16,27 @@ Goal: portfolio site live at your domain, served from containers, on the Dell ru
 
 - [ ] Download the latest Proxmox VE ISO from proxmox.com
 - [ ] Flash it to the 16GB USB stick (e.g. `balenaEtcher` or `Rufus`)
-- [ ] Boot the Dell from the USB stick (may need to change boot order in BIOS/UEFI first)
 
-## 3. Wipe Windows, install Proxmox VE
+*(Do this from your desktop — nothing here touches the Dell yet, so it can happen any time before the install.)*
 
-- [ ] Confirm the Windows 11 Pro license is captured (already carries forward to a future VM per the roadmap — no need to preserve the install itself)
+## 3. Before wiping — use Windows while it's still there
+
+- [ ] **Update the BIOS/firmware via Dell Command Update** — far harder once Proxmox is installed
+- [ ] Extract the product key: `(Get-WmiObject -query 'select * from SoftwareLicensingService').OA3xOriginalProductKey`
+- [ ] Verify the refurb matches the listing — 32GB as **2×16GB dual channel**, NVMe capacity, CPU model
+- [ ] Note the Service Tag: `wmic bios get serialnumber` (or the sticker) for warranty lookups
+
+> Note: the OEM key is hardware-bound to this Dell. It reactivates on a Windows reinstall *here*, but will **not** activate in a VM — budget a separate license if the Phase 3 Windows VM needs one.
+
+## 4. Wipe Windows, install Proxmox VE
+
+- [ ] Boot the Dell from the USB stick (F12 for the one-time boot menu; F2 for BIOS setup if boot order needs changing)
 - [ ] Run the Proxmox installer, wipe the NVMe drive
 - [ ] Set a strong root password during install
 - [ ] Configure static IP for Proxmox on your home LAN (write it down — this is how you'll reach the web UI headless from now on)
 - [ ] Complete install, reboot, remove USB stick
 
-## 4. First login and initial config
+## 5. First login and initial config
 
 - [ ] From another device on the network, browse to `https://<proxmox-ip>:8006`
 - [ ] Log in as root
@@ -34,7 +44,7 @@ Goal: portfolio site live at your domain, served from containers, on the Dell ru
 - [ ] Run `apt update && apt full-upgrade` on the Proxmox host itself
 - [ ] Disconnect the temporary display/keyboard — go fully headless from here on
 
-## 5. Create the Debian VM
+## 6. Create the Debian VM
 
 - [ ] Download a Debian netinst ISO, upload it to Proxmox (Datacenter → local storage → ISO Images → Upload)
 - [ ] Create a new VM: allocate a sensible slice of the 32GB RAM / 512GB NVMe (leave headroom for later phases — see the roadmap's Phase 3 note about RAM)
@@ -43,33 +53,33 @@ Goal: portfolio site live at your domain, served from containers, on the Dell ru
 - [ ] Enable SSH server during install (or `apt install openssh-server` after)
 - [ ] Set up SSH key-based login from your desktop; disable password auth once key login works
 
-## 6. Harden the Debian VM (baseline, more comes in Phase 2)
+## 7. Harden the Debian VM (baseline, more comes in Phase 2)
 
 - [ ] `apt update && apt full-upgrade`
 - [ ] Enable unattended-upgrades for security patches
 - [ ] Set up a basic firewall on the VM itself (`ufw` — allow SSH, HTTP/HTTPS only)
 - [ ] Create a non-root user with sudo, confirm you can log in as it before locking down root SSH login
 
-## 7. Install Docker
+## 8. Install Docker
 
 - [ ] Install Docker Engine + Docker Compose plugin (official Docker install script/repo, not the Debian-packaged version — usually more current)
 - [ ] Add your non-root user to the `docker` group
 - [ ] Verify with `docker run hello-world`
 
-## 8. Containerize the portfolio site
+## 9. Containerize the portfolio site
 
 - [ ] Write a `Dockerfile` for the Flask app (base image, install deps, copy app code)
 - [ ] Configure Gunicorn as the WSGI server (don't run Flask's dev server in production)
 - [ ] Write a `docker-compose.yml` for the app container
 - [ ] Build and run locally on the VM, confirm the site responds on its internal port (e.g. `curl localhost:8000`)
 
-## 9. Register the domain
+## 10. Register the domain
 
 - [ ] Register your domain (`yourname.dev` or similar)
 - [ ] Create a free Cloudflare account
 - [ ] Add the domain to Cloudflare, update nameservers at the registrar to Cloudflare's
 
-## 10. Set up the Cloudflare Tunnel
+## 11. Set up the Cloudflare Tunnel
 
 - [ ] Install `cloudflared` (as a container alongside the app, per the roadmap — add it to the same `docker-compose.yml`)
 - [ ] Authenticate `cloudflared` to your Cloudflare account, create a named tunnel
@@ -77,13 +87,13 @@ Goal: portfolio site live at your domain, served from containers, on the Dell ru
 - [ ] Create the DNS record in Cloudflare (CNAME to the tunnel) — this is what makes port forwarding unnecessary
 - [ ] Start the tunnel container, confirm it shows "connected" in the Cloudflare dashboard
 
-## 11. Verify
+## 12. Verify
 
 - [ ] Browse to your domain from an external network (phone on cellular data, not home Wi-Fi) — confirms it's not just working locally
 - [ ] Confirm HTTPS is active (padlock, valid cert — Cloudflare handles this automatically)
 - [ ] Confirm no ports are forwarded on the XB6 (check the router's port forwarding page — should be empty for this)
 
-## 12. UPS graceful shutdown (do this before you actually need it)
+## 13. UPS graceful shutdown (do this before you actually need it)
 
 - [ ] Connect UPS to the Dell via USB
 - [ ] Install NUT (Network UPS Tools) on Proxmox or the Debian VM

@@ -12,7 +12,7 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 
 | Part | ~CAD | Why it's needed |
 |------|------|-----------------|
-| Dell OptiPlex Micro (refurb) — **i5-8500T** (6-core), **32GB DDR4**, **512GB NVMe**, Win 11 Pro | ~$400 | The foundation. 32GB + NVMe out of the box (no upgrades needed for ages); free 2.5" bay + 2nd RAM slot for later. Wipe Windows for Proxmox (license carries to a future VM). |
+| Dell OptiPlex Micro (refurb) — **i5-8500T** (6-core), **32GB DDR4**, **512GB NVMe**, Win 11 Pro | ~$400 | The foundation. 32GB + NVMe out of the box (no upgrades needed for ages); free 2.5" bay for later. Wipe Windows for Proxmox — see the licensing note below. |
 | UPS — **CyberPower CP1500PFCLCD** (1500VA / 1000W, pure sine, 12 outlets, USB) | ~$230 | Protects the Dell now, and carries the lab core **plus your 6750 XT desktop** through blips; USB → NUT for coordinated graceful shutdown. |
 | **Cat6 cabling (buy-once set)** — 8× short (1–2 ft) + 3× long (XB6→lab, desk→lab, AP run — **measure**) + 3× spare (5–7 ft) | ~$80 | Every run through Phase 4 in one purchase. In Phase 0 you use one long run (XB6 → Dell); the rest come into play as you add gear. Cat6 only — 1G now, 2.5G/10G later. |
 | Display cable (HDMI or DisplayPort) for the one-time Proxmox install | ~$10 | Screen + keyboard needed once to install Proxmox; borrow the desktop's monitor, then go headless. |
@@ -20,6 +20,13 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 | Domain name | ~$15/yr | A real address (`yourname.dev`) instead of an IP. |
 
 **Software (all free):** Proxmox VE → a Debian VM running Docker → your site as containers (Flask + Gunicorn), plus a `cloudflared` container. A **Cloudflare Tunnel** publishes the site with HTTPS and **no open ports** on your router.
+
+> **⚠️ Before wiping Windows — do these three things while it is still installed.**
+> 1. **Update the BIOS/firmware.** Dell Command Update is Windows-native; after Proxmox is installed this means a bootable USB or `fwupd` support that may not exist for this model.
+> 2. **Extract the product key:** `(Get-WmiObject -query 'select * from SoftwareLicensingService').OA3xOriginalProductKey`
+> 3. **Verify the refurb hardware** matches the listing — 32GB as 2×16GB (dual channel, not one stick), NVMe capacity, CPU model, service tag — while checking is still easy and returning is still simple.
+>
+> **Windows licensing correction (2026-08-21):** the OEM license is embedded in UEFI firmware (ACPI MSDM table) and is **hardware-bound**. Reinstalling Windows *on this Dell* reactivates automatically, but it will **not** activate in a VM — a guest does not read that firmware table, and exposing it via SMBIOS is legally murky. Plan on a separate license if the Phase 3 Windows VM needs one; unactivated Windows runs indefinitely with cosmetic nags and no functional limits, which is fine for a lab.
 
 **Milestone:** portfolio live at your domain, served from containers, on a hypervisor you'll keep.
 
