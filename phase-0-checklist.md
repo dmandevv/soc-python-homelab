@@ -56,8 +56,8 @@ Goal: portfolio site live at your domain, served from containers, on the Dell ru
 ## 7. Harden the Debian VM (baseline, more comes in Phase 2)
 
 - [x] `apt update && apt full-upgrade`
-- [ ] Enable unattended-upgrades for security patches
-- [ ] Set up a basic firewall on the VM itself (`ufw` — **SSH only**; the tunnel is outbound-initiated, so no inbound HTTP/HTTPS is needed)
+- [x] Enable unattended-upgrades for security patches
+- [x] Set up a basic firewall on the VM itself (`ufw` — **SSH only**; the tunnel is outbound-initiated, so no inbound HTTP/HTTPS is needed)
 - [x] Create a non-root user with sudo, confirm you can log in as it before locking down root SSH login
 
 ## 8. Install Docker
