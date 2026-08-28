@@ -51,7 +51,21 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 > **⚠️ Flag — verify the switch's own firewall rules are actually doing their job.** With RouterOS as the only perimeter defense now, confirm before trusting this setup: does the WAN interface have a default-deny inbound rule (NAT alone doesn't block unsolicited inbound traffic — that's a separate, additional rule)? Can a device on the WAN side reach internal VLANs directly, bypassing the router's own rules? Is the native/default VLAN not left as VLAN 1 on the internal ports (a known VLAN-hopping vector)? Same verification discipline as before, just aimed at RouterOS's firewall instead of a VLAN-tag boundary — don't skip it because it's "just the switch's default config."
 
-**Software (free):** RouterOS on the switch — WAN interface (NAT + firewall), internal VLANs 10/20/30/40, DHCP, DNS, trunk + access ports. No separate OPNsense VM for now.
+**Software (free):** RouterOS on the switch — WAN interface (NAT + firewall), internal VLANs (below), DHCP, DNS, trunk + access ports. No separate OPNsense VM for now.
+
+**VLAN plan:**
+
+| VLAN | Name | Purpose | Cable colour |
+|------|------|---------|--------------|
+| **10** | Management | Switch, Proxmox host, IPMI/out-of-band. Only VLAN permitted to reach device management interfaces. | ⚫ Black |
+| **20** | Trusted | Desktop, laptops, personal devices. General internet access. | ⚫ Black |
+| **30** | IoT | Home Assistant, smart devices, anything untrustworthy but not internet-facing. **No access to 10 or 20.** | 🔴 Red |
+| **40** | DMZ | The website VM. Inbound 443 only, **no lateral access to any other VLAN.** | 🔴 Red |
+| **99** | Native (unused) | Trunk native VLAN. **Carries no traffic and has no devices** — exists so the native VLAN is never VLAN 1. | — |
+
+**Why VLAN 99 is empty on purpose:** the native VLAN is the position a double-tagging VLAN-hopping attack must be launched from. With no devices in it, there is nowhere to launch from. It also means a native-VLAN mismatch between two trunk ends merges nothing, rather than silently bridging two real segments.
+
+**Planned later:** a **sandbox VLAN** in Phase 3 for live malware analysis (fully isolated, no route anywhere), and possibly a **guest Wi-Fi VLAN** in Phase 4 once the AP maps SSIDs to VLANs.
 
 **Note on the XB6 & Wi-Fi:** you can keep the XB6 **un-bridged (double-NAT)** through the early phases so the house keeps its Wi-Fi — VLANs still work fine behind it. Switch the XB6 to **bridge mode** later (in Phase 4), when you add your own access point — because bridging turns the XB6's Wi-Fi off.
 
