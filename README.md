@@ -121,6 +121,8 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 **Software (free):** Home Assistant OS (on the Pi); Jellyfin media server as an LXC on the Dell (uses the i5's Quick Sync for transcoding), mounting the NAS for storage.
 
+**Documentation tooling — consider here:** **NetBox** as a container stack on the Dell. It covers four of the Network+ 3.1 documentation artifacts in one tool — **IPAM, asset inventory, rack elevations, and cable maps** — and is genuinely used in infrastructure roles, so running it is a portfolio item rather than housekeeping. Deliberately *not* earlier: ten devices do not justify a PostgreSQL-backed DCIM, and maintaining the markdown IP plan by hand first teaches the problem the tool solves rather than just its UI.
+
 **Milestone:** the full vision — portfolio, segmented network, home SOC, IoT hub, and a streaming media library.
 
 ---

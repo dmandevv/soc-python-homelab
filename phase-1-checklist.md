@@ -149,7 +149,7 @@ Third octet = VLAN ID, so any address identifies its own segment at a glance and
 
 ## 8. Document and close out
 
-- [ ] Record the final IP plan per VLAN in this repo
+- [ ] **Write the IP plan and static allocation register** to this repo as markdown — per VLAN: subnet, gateway, DHCP pool range, and **which static addresses below the pool are reserved for what** (switch SVIs, Proxmox host, website VM, future AP/NAS/Home Assistant). This is hand-maintained IPAM, and it is what prevents a static being assigned inside a DHCP pool — the conflict that works until the pool hands the same address out
 - [ ] Export the running config and commit it
 - [ ] Draw the physical and logical diagrams (Objective 3.1 material — do it while it's fresh)
 - [ ] Note the measured inter-VLAN routing throughput
