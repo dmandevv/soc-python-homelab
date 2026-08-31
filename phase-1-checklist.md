@@ -6,6 +6,14 @@ Goal: a segmented, routed network built on the MikroTik CRS326 running RouterOS 
 
 ---
 
+> ## ⏸ Paused 2026-08-31 — resume at §2b
+>
+> **Working state, verified:** RouterOS 7.24.1 on the CRS326, WAN static on ether1 (`10.0.0.2/24`), flat `10.10.10.0/24` LAN with NAT and DHCP, default-deny input firewall confirmed from an off-network device, `rp-filter=strict`. The desktop sits behind the switch at `10.10.10.200` and has internet. The Dell and the website are still on the XB6 and have not been touched.
+>
+> **Next action:** §2 — define VLANs 10/20/30/40/99 in the bridge VLAN table, set access-port PVIDs, build the trunk to the Dell. All of it with `vlan-filtering=no`; activation is a single deliberate step afterwards.
+>
+> **Do not forget:** the flat config is **temporary**. `temp-pool`, `temp-dhcp`, and `10.10.10.1/24` on `bridge1` get **replaced**, not built on — that address moves from `bridge1` to the `vlan10` interface when filtering goes on.
+
 ## 0. Before touching anything
 
 - [ ] Read the ⚠️ **Two ways to lock yourself out** section at the bottom of this file, and install Winbox on the desktop
