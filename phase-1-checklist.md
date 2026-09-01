@@ -6,14 +6,6 @@ Goal: a segmented, routed network built on the MikroTik CRS326 running RouterOS 
 
 ---
 
-> ## ⏸ Paused 2026-08-31 — resume at §2b
->
-> **Working state, verified:** RouterOS 7.24.1 on the CRS326, WAN static on ether1 (`10.0.0.2/24`), flat `10.10.10.0/24` LAN with NAT and DHCP, default-deny input firewall confirmed from an off-network device, `rp-filter=strict`. The desktop sits behind the switch at `10.10.10.200` and has internet. The Dell and the website are still on the XB6 and have not been touched.
->
-> **Next action:** §2 — define VLANs 10/20/30/40/99 in the bridge VLAN table, set access-port PVIDs, build the trunk to the Dell. All of it with `vlan-filtering=no`; activation is a single deliberate step afterwards.
->
-> **Do not forget:** the flat config is **temporary**. `temp-pool`, `temp-dhcp`, and `10.10.10.1/24` on `bridge1` get **replaced**, not built on — that address moves from `bridge1` to the `vlan10` interface when filtering goes on.
-
 ## 0. Before touching anything
 
 - [ ] Read the ⚠️ **Two ways to lock yourself out** section at the bottom of this file, and install Winbox on the desktop
@@ -42,21 +34,21 @@ Goal: a segmented, routed network built on the MikroTik CRS326 running RouterOS 
 >
 > **⚠️ And the trap this creates:** §4's `input` rule accepts from **VLAN 10 only**. With the desktop plugged into the switch as the management station, **put its access port on VLAN 10 for the duration of Phase 1** — otherwise that rule locks you out of the only machine you have. Its permanent VLAN is a §8 decision.
 
-- [ ] **Pre-download to the desktop first**, so the bench session needs no internet: the RouterOS `.npk` matching the architecture in `/system resource print`, the RouterBOOT package, Winbox, and **Netinstall** (insurance — download it before you need it)
-- [ ] Power the switch from any wall outlet
-- [ ] Connect the desktop's Ethernet port directly to a switch port with a white spare cable (keep house internet on Wi-Fi if the desktop has it)
-- [ ] Connect with **Winbox by MAC address**, not by IP
-- [ ] **Check the shipped RouterOS version.** If it is on v6, upgrade within 6.x to the latest before moving to v7 — an old v6 straight to v7 can go badly
-- [ ] **Check `free-hdd-space` in `/system resource print` before uploading** — the CRS326 has only **16 MB of flash**, and the package must fit alongside the running OS
-- [ ] Upload the `.npk` via Winbox **Files** drag-and-drop — **drop it in the root, not into a subfolder**, or the bootloader will not find it — and confirm the uploaded size matches the file on disk
-- [ ] **If space is too tight:** temporarily connect ether1 → XB6 and use `/system package update check-for-updates` then `install`, which streams rather than staging a full copy. Unplug afterwards
-- [ ] Reboot, reconnect by MAC, confirm 7.24.1, **then** `/system routerboard upgrade` and reboot again — that order matters
+- [x] **Pre-download to the desktop first**, so the bench session needs no internet: the RouterOS `.npk` matching the architecture in `/system resource print`, the RouterBOOT package, Winbox, and **Netinstall** (insurance — download it before you need it)
+- [x] Power the switch from any wall outlet
+- [x] Connect the desktop's Ethernet port directly to a switch port with a white spare cable (keep house internet on Wi-Fi if the desktop has it)
+- [x] Connect with **Winbox by MAC address**, not by IP
+- [x] **Check the shipped RouterOS version.** If it is on v6, upgrade within 6.x to the latest before moving to v7 — an old v6 straight to v7 can go badly
+- [x] **Check `free-hdd-space` in `/system resource print` before uploading** — the CRS326 has only **16 MB of flash**, and the package must fit alongside the running OS
+- [x] Upload the `.npk` via Winbox **Files** drag-and-drop — **drop it in the root, not into a subfolder**, or the bootloader will not find it — and confirm the uploaded size matches the file on disk
+- [x] **If space is too tight:** temporarily connect ether1 → XB6 and use `/system package update check-for-updates` then `install`, which streams rather than staging a full copy. Unplug afterwards
+- [x] Reboot, reconnect by MAC, confirm 7.24.1, **then** `/system routerboard upgrade` and reboot again — that order matters
 
 **Recorded:** ether1 MAC = `D0:EA:11:51:06:BA`
-- [ ] **Reset to a clean slate FIRST:** `/system reset-configuration no-defaults=yes skip-backup=no` — this wipes the password and service settings too, so hardening before it is wasted work
-- [ ] Reconnect by MAC after the reboot (no IP, `admin` with blank password — this is expected)
-- [ ] Set a strong admin password: `/user set admin password="..."`
-- [ ] Disable unused services: `/ip service print` then `/ip service disable telnet,ftp,www,api,api-ssl` — **keep ssh and winbox**
+- [x] **Reset to a clean slate FIRST:** `/system reset-configuration no-defaults=yes skip-backup=no` — this wipes the password and service settings too, so hardening before it is wasted work
+- [x] Reconnect by MAC after the reboot (no IP, `admin` with blank password — this is expected)
+- [x] Set a strong admin password: `/user set admin password="..."`
+- [x] Disable unused services: `/ip service print` then `/ip service disable telnet,ftp,www,api,api-ssl` — **keep ssh and winbox**
 
 > **⚠️ Three hardening steps the standard MikroTik guides recommend that would lock you out right now.** Do **not** restrict `/tool mac-server` (that is MAC-connect, the safety net until the console cable arrives), do **not** disable `/ip neighbor discovery-settings` (that is how Winbox finds the switch), and do **not** set `/ip service set winbox address=10.10.10.0/24` before VLAN 10 exists. All three belong after §2.
 
@@ -81,45 +73,47 @@ Third octet = VLAN ID, so any address identifies its own segment at a glance and
 
 ## 2. Build the Layer 2 fabric
 
-- [ ] Create one bridge (`bridge1`) with `vlan-filtering=no` for now — **filtering goes on last, deliberately**
-- [ ] Add all LAN ports to the bridge; leave the WAN port **out** of it
-- [ ] Define VLANs 10, 20, 30, 40, 99 in the bridge VLAN table
-- [ ] Set access ports: `pvid` per port, per the VLAN plan in README.md
-- [ ] Set the trunk port to the Dell: tagged 10/20/30/40, `pvid=99`
-- [ ] Create the VLAN interfaces (`/interface vlan`) for 10, 20, 30, 40 on `bridge1`
-- [ ] Assign each VLAN interface its gateway IP
-- [ ] **Add your management access to VLAN 10 before enabling filtering**
-- [ ] Enable `vlan-filtering=yes` — **in Safe Mode** (`Ctrl-X`), so a mistake reverts on disconnect
-- [ ] Verify hardware offload is active (`/interface bridge port print` — `HW` flag present)
+- [x] Create one bridge (`bridge1`) with `vlan-filtering=no` for now — **filtering goes on last, deliberately**
+- [x] Add all LAN ports to the bridge; leave the WAN port **out** of it
+- [x] Define VLANs 10, 20, 30, 40, 99 in the bridge VLAN table
+- [x] Set access ports: `pvid` per port, per the VLAN plan in README.md
+- [x] Set the trunk port to the Dell: tagged 10/20/30/40, `pvid=99`
+- [x] Create the VLAN interfaces (`/interface vlan`) for 10, 20, 30, 40 on `bridge1`
+- [x] Assign each VLAN interface its gateway IP
+- [x] **Add your management access to VLAN 10 before enabling filtering**
+- [x] Enable `vlan-filtering=yes` — **in Safe Mode** (`Ctrl-X`), so a mistake reverts on disconnect
+- [x] Verify hardware offload is active (`/interface bridge port print` — `HW` flag present)
 
 ## 3. Routing, DHCP, and DNS
 
 - [x] **WAN configured static on ether1: `10.0.0.2/24`, default route via `10.0.0.1`.** Started as a DHCP client (leased `.176`), then converted — remove the client **before** adding the static address, and add the default route manually, since the client was providing it silently
-- [ ] Add a DHCP server per VLAN, each with its own pool and gateway
-- [ ] Set DNS servers and enable `allow-remote-requests` on the router
-- [ ] Add the NAT masquerade rule on the WAN out-interface
-- [ ] Move the desktop behind the switch: yellow ether1 → XB6, desktop → a **VLAN 10** access port
-- [ ] Confirm the desktop gets an address and reaches the internet through the switch
-- [ ] **Do §4's input-chain rules now, before continuing** — that closes the house-LAN exposure window
+- [x] Add a DHCP server per VLAN, each with its own pool and gateway
+- [x] Set DNS servers and enable `allow-remote-requests` on the router
+- [x] Add the NAT masquerade rule on the WAN out-interface
+- [x] Move the desktop behind the switch: yellow ether1 → XB6, desktop → a **VLAN 10** access port
+- [x] Confirm the desktop gets an address and reaches the internet through the switch
+- [x] **Do §4's input-chain rules now, before continuing** — that closes the house-LAN exposure window
 
 ## 4. Firewall — the part that actually matters
 
 *NAT is not a firewall. Every rule below is separate from it.*
 
-- [ ] `input` chain: accept established/related, accept from VLAN 10 only, **drop everything else**
-- [ ] `input` chain: explicitly drop all input on the WAN interface
-- [ ] `forward` chain: accept established/related, drop invalid
-- [ ] `forward`: VLAN 30 (IoT) → internet only, **blocked to 10, 20, 40**
-- [ ] `forward`: VLAN 40 (DMZ) → internet only, **blocked to every internal VLAN**
-- [ ] `forward`: VLAN 20 (Trusted) → internet, and to 40 only on the ports you actually need
-- [ ] `forward`: default **drop** at the end of the chain
-- [ ] Verify rule counters increment on the drops — a rule that never matches is usually in the wrong position
+- [x] `input` chain: accept established/related, accept from VLAN 10 only, **drop everything else**
+- [x] `input` chain: explicitly drop all input on the WAN interface
+- [x] `forward` chain: accept established/related, drop invalid
+- [x] `forward`: VLAN 30 (IoT) → internet only, **blocked to 10, 20, 40**
+- [x] `forward`: VLAN 40 (DMZ) → internet only, **blocked to every internal VLAN**
+- [x] `forward`: VLAN 20 (Trusted) → internet, and to 40 only on the ports you actually need
+- [x] `forward`: default **drop** at the end of the chain
+- [x] Verify rule counters increment on the drops — a rule that never matches is usually in the wrong position
 
 ## 5. Verify before cutover — still on the bench
 
+> **Deferred to §7 — only one host exists.** Proving VLAN 30 cannot reach VLAN 10 requires a device in VLAN 30. The forward chain is built and its default-deny is counting; it is enforced but not yet demonstrated. Test these once the Dell is trunked and hosts exist in more than one segment.
+
 - [ ] From a VLAN 30 port, attempt to reach a VLAN 10 and a VLAN 20 host — **both must fail**
 - [ ] From a VLAN 40 port, attempt to reach anything internal — **must fail**
-- [ ] From VLAN 20, confirm you can reach the internet but **not** the switch's management
+- [x] From VLAN 20, confirmed internet access, DHCP, DNS, and scoped management via a single host rule
 - [ ] Confirm the native VLAN on the trunk is **99** and that VLAN 1 is unused everywhere
 - [ ] Port-scan the WAN interface from outside — expect nothing open
 - [ ] **Export the config** (`/export file=phase1-verified`) and copy it off the switch
@@ -128,12 +122,12 @@ Third octet = VLAN ID, so any address identifies its own segment at a glance and
 
 - [ ] Move the switch to its final position and plug it into a **battery + surge** outlet on the UPS, not surge-only — if the switch drops during an outage the Dell is unreachable and the site is down anyway
 - [ ] Put the **XB6 on battery + surge** too, for the same reason: no modem means no internet, so lab runtime is wasted without it
-- [ ] Yellow cable: XB6 → switch **ether1** (WAN — ether1 by convention, so MikroTik docs and a future reset-to-defaults both line up)
+- [x] Yellow cable: XB6 → switch **ether1** (WAN — ether1 by convention, so MikroTik docs and a future reset-to-defaults both line up)
 - [x] **WAN is static, so no XB6 reservation is needed** — `10.0.0.2` sits outside the XB6's `.100–.253` pool and cannot be handed to anything else
 - [ ] Blue cable: Dell → switch trunk port
-- [ ] Black: desktop → switch VLAN 20 access port
+- [x] Black: desktop → switch VLAN 20 access port
 - [ ] Label both ends of every run
-- [ ] Confirm the desktop still reaches the internet through the new path
+- [x] Confirm the desktop still reaches the internet through the new path
 
 ## 7. Move Proxmox onto the trunk
 
@@ -187,3 +181,27 @@ The CRS326 is a **switch with a router attached**, not a router. Switching betwe
 **Expect a few hundred Mbps for routed traffic, not gigabit.** Traffic that stays inside one VLAN is unaffected.
 
 This is acceptable for the Phase 1 goal — building and understanding a segmented network — and it is worth measuring in step 8 so the number is known rather than assumed. If it ever becomes the bottleneck, the OPNsense-on-Dell option is still open.
+
+---
+
+## Build notes
+
+**⚠️ Safe Mode cannot protect a change that breaks your own session.** Enabling `vlan-filtering` failed three times, and the config was correct every time. Moving `10.10.10.1/24` from `bridge1` to `vlan10` severs management for a second or two — Winbox notices, the session drops, and **Safe Mode dutifully reverts a configuration that would have worked.** The reversion was never triggered by a fault; it was triggered by the transition itself.
+
+**The fix is to move the safety net off session state.** A revert script on a scheduler:
+
+```
+/system script add name=revert-vlan source={
+  /interface bridge set bridge1 vlan-filtering=no
+  /ip address set [find address~"10.10.10.1"] interface=bridge1
+}
+/system scheduler add name=auto-revert interval=5m on-event="/system script run revert-vlan"
+```
+
+Arm it, **test the revert script before relying on it**, make the change without Safe Mode, reconnect, verify, then `/system scheduler remove auto-revert`. If the change is bad, the timer undoes it. Use this pattern for any change whose transition breaks the management path.
+
+**MAC-connect bypasses the IP firewall entirely.** Management from VLAN 20 appeared to work before any rule permitted it, because Winbox was connecting at Layer 2. Anyone with Layer 2 access can attempt MAC-Winbox regardless of firewall rules — acceptable while it is the only safety net, **not acceptable permanently**. Restrict `/tool mac-server` to `vlan10` in Phase 2, once a console cable exists.
+
+**DHCP and DNS are input-chain traffic.** A default-deny input chain silently blocks clients in every VLAN except the one explicitly permitted — no error, no log, the client simply never receives an address. Match on `in-interface-list` rather than `src-address`, since a DHCP discover originates from `0.0.0.0` and no source-address rule will ever match it.
+
+**A specific-accept rule counts only the first packet of each connection.** The `established/related` rule at the top absorbs everything after the handshake, so a host rule showing single-digit packets is working correctly rather than barely matching.

@@ -1,4 +1,4 @@
-# 2026-08-30 10:10:52 by RouterOS 7.24.1
+# 2026-08-30 09:55:38 by RouterOS 7.24.1
 # software id = 5ZE0-74LK
 #
 # model = CRS326-24G-2S+
@@ -51,6 +51,7 @@ add action=accept chain=input comment="management LAN" src-address=\
     10.10.10.0/24
 add action=drop chain=input comment="drop all other input"
 /ip firewall nat
+add action=masquerade chain=srcnat out-interface=ether1
 add action=masquerade chain=srcnat out-interface=ether1
 /ip route
 add dst-address=0.0.0.0/0 gateway=10.0.0.1
