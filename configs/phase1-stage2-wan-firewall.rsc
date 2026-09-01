@@ -1,8 +1,8 @@
 # 2026-08-30 09:55:38 by RouterOS 7.24.1
-# software id = 5ZE0-74LK
+# software id = ****-****
 #
 # model = CRS326-24G-2S+
-# serial number = HM80B1MVKS2
+# serial number = ***********
 /interface bridge
 add name=bridge1
 /ip pool

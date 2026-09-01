@@ -1,8 +1,8 @@
-# 2026-09-01 09:09:09 by RouterOS 7.24.1
-# software id = ****-****
+# 2026-09-01 14:11:49 by RouterOS 7.24.1
+# software id = 5ZE0-74LK
 #
 # model = CRS326-24G-2S+
-# serial number = ***********
+# serial number = HM80B1MVKS2
 /interface bridge
 add name=bridge1 vlan-filtering=yes
 /interface ethernet
@@ -22,12 +22,6 @@ add name=LAN
 add name=pool-vlan10 ranges=10.10.10.100-10.10.10.200
 add name=pool-vlan20 ranges=10.10.20.100-10.10.20.200
 add name=pool-vlan30 ranges=10.10.30.100-10.10.30.200
-/system script
-add dont-require-permissions=no name=revert-vlan owner=admin policy=\
-    ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="\
-    \n  /interface bridge set bridge1 vlan-filtering=no\
-    \n  /ip address set [find address~\"10.10.10.1\"] interface=bridge1\
-    \n"
 /interface bridge port
 add bridge=bridge1 frame-types=admit-only-vlan-tagged interface=ether2 pvid=\
     99
@@ -121,9 +115,20 @@ add action=accept chain=input comment="DNS + DHCP from LAN" dst-port=53,67 \
     in-interface-list=LAN protocol=udp
 add action=accept chain=input comment="DNS over TCP from LAN" dst-port=53 \
     in-interface-list=LAN protocol=tcp
-add action=accept chain=input comment="management from desktop" in-interface=\
-    vlan20 src-address=10.10.20.50
+add action=accept chain=input comment="management from desktop" dst-port=\
+    22,8291 in-interface=vlan20 protocol=tcp src-address=10.10.20.50
 add action=drop chain=input comment="drop all other input"
+add action=accept chain=forward comment=established/related connection-state=\
+    established,related
+add action=drop chain=forward comment=invalid connection-state=invalid
+add action=accept chain=forward comment="LAN to internet" in-interface-list=\
+    LAN out-interface=ether1
+add action=accept chain=forward comment="management to all VLANs" \
+    in-interface=vlan10
+add action=accept chain=forward comment="desktop to management" dst-port=\
+    22,8006 in-interface=vlan20 out-interface=vlan10 protocol=tcp \
+    src-address=10.10.20.50
+add action=drop chain=forward comment="drop all other forward"
 /ip firewall nat
 add action=masquerade chain=srcnat out-interface=ether1
 /ip route

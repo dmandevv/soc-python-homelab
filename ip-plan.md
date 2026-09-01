@@ -38,17 +38,28 @@ Within every /24:
 |---|---|---|---|
 | `10.0.0.2` | CRS326 — WAN interface (ether1) | WAN | **Configured** |
 | `10.10.10.1` | CRS326 — vlan10 gateway | 10 | **Configured** |
-| `10.10.10.50` | Desktop (management station) | 10 | **Configured** — temporary; may return to DHCP |
+| `10.10.10.20` | Proxmox host — `vmbr0.10` | 10 | **Configured** |
 | `10.10.20.1` | CRS326 — vlan20 gateway | 20 | **Configured** |
+| `10.10.20.50` | Desktop — management station | 20 | **Configured** — see note below |
 | `10.10.30.1` | CRS326 — vlan30 gateway | 30 | **Configured** |
 | `10.10.40.1` | CRS326 — vlan40 gateway | 40 | **Configured** |
-| `10.10.40.10` | Website VM | 40 | **Reserved** — applied on the VM in §7 |
+| `10.10.40.10` | Website VM — `ens18` | 40 | **Configured** |
+
+**The desktop sits on VLAN 20, not VLAN 10, deliberately.** It is a general-purpose machine that browses the web and reads email, which makes it the highest-risk device on the network — and the management VLAN is the segment that can reach every device's management interface. Placing it in VLAN 20 keeps that boundary intact.
+
+It reaches management through **two host-specific firewall exceptions**, both scoped to `10.10.20.50` alone rather than to VLAN 20 as a whole:
+
+| Chain | Permits |
+|---|---|
+| `input` | The desktop → the switch itself, TCP 22 and 8291 |
+| `forward` | The desktop → VLAN 10, TCP 22 and 8006 |
+
+**If the desktop's address ever changes, both rules must be updated**, or management access silently stops working. That coupling is the cost of host-scoped rules, and the reason the address is static rather than leased.
 
 ## Planned (Phase 4)
 
 | Address | Device | VLAN |
 |---|---|---|
-| `10.10.10.20` | Proxmox host — management | 10 |
 | `10.10.10.30` | Access point — management | 10 |
 | `10.10.30.10` | Home Assistant (Raspberry Pi) | 30 |
 | `10.10.10.40` | NAS — management | 10 |

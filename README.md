@@ -49,7 +49,15 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 **A "for now" decision, not a final one:** OPNsense-on-Dell is still there to revisit later if you want the NFV/resource-tuning practice for its own sake — nothing about running the firewall on the switch rules it out, and no hardware bought so far is wasted either way.
 
-> **⚠️ Flag — verify the switch's own firewall rules are actually doing their job.** With RouterOS as the only perimeter defense now, confirm before trusting this setup: does the WAN interface have a default-deny inbound rule (NAT alone doesn't block unsolicited inbound traffic — that's a separate, additional rule)? Can a device on the WAN side reach internal VLANs directly, bypassing the router's own rules? Is the native/default VLAN not left as VLAN 1 on the internal ports (a known VLAN-hopping vector)? Same verification discipline as before, just aimed at RouterOS's firewall instead of a VLAN-tag boundary — don't skip it because it's "just the switch's default config."
+> **✅ Flag resolved 2026-09-01 — all three questions verified, not assumed.**
+>
+> **Default-deny inbound on the WAN?** Yes. The `input` chain ends in an explicit drop, and NAT is not relied on for it. Confirmed from a phone on the XB6's network: ICMP to `10.0.0.2` succeeds (permitted deliberately, so PMTUD keeps working) while TCP 22 and 8291 time out, and the drop rule's counter increments.
+>
+> **Can a WAN-side device reach internal VLANs?** No. `ether1` is deliberately outside the bridge, so there is no Layer 2 path, and `rp-filter=strict` discards any packet whose source address does not match the interface it arrived on.
+>
+> **Is the native VLAN something other than 1?** Yes — VLAN 99, with no address, no DHCP, no devices, and no `bridge1` membership, so the router does not participate in it. Trunk ports additionally run `frame-types=admit-only-vlan-tagged`, which rejects untagged frames outright — so a double-tagging attempt has no untagged outer frame to ride in on. Two independent mechanisms close the same door.
+>
+> Full policy matrix and test results in [network-diagrams.md](network-diagrams.md).
 
 **Software (free):** RouterOS on the switch — WAN interface (NAT + firewall), internal VLANs (below), DHCP, DNS, trunk + access ports. No separate OPNsense VM for now.
 
@@ -69,7 +77,11 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 **Note on the XB6 & Wi-Fi:** you can keep the XB6 **un-bridged (double-NAT)** through the early phases so the house keeps its Wi-Fi — VLANs still work fine behind it. Switch the XB6 to **bridge mode** later (in Phase 4), when you add your own access point — because bridging turns the XB6's Wi-Fi off.
 
-**Milestone:** a fully routed, correctly segmented network you understand end to end; the website moves onto it.
+**Milestone:** ✅ **Reached 2026-09-01.** A fully routed, segmented network with the website moved onto it. The CRS326 runs RouterOS as switch, router, and firewall; VLANs 10/20/30/40 are live with hardware offload intact; the Proxmox host sits on VLAN 10 and the website VM on VLAN 40, reachable at dangagne.com through the Cloudflare Tunnel. **Isolation is verified rather than intended** — the DMZ can reach the internet and nothing else internal.
+
+**Documentation:** [phase-1-checklist.md](phase-1-checklist.md) · [ip-plan.md](ip-plan.md) · [network-diagrams.md](network-diagrams.md) · [configs/](configs/)
+
+**⚠️ Measured limitation:** inter-VLAN routing runs on the CPU, not the switch chip. **251 Mbps for a single flow, 468 Mbps aggregate across four.** Same-VLAN traffic is unaffected and runs at line rate. See [network-diagrams.md](network-diagrams.md) for the measurements and what they mean for Phase 4.
 
 ---
 
@@ -116,10 +128,12 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 |------|------|-----------------|
 | Access point — **UniFi U7 Lite** (or Omada EAP) + PoE injector | $100–160 | Segmented Wi-Fi: maps SSIDs to VLANs so IoT/guest devices land on the right (isolated) segment. Pair with switching the XB6 to bridge mode. |
 | **Raspberry Pi 5 (8GB)** + fanless case + NVMe + PSU + Zigbee/Matter USB stick | $260 | Dedicated Home Assistant appliance on the IoT VLAN. Boot from **NVMe** (HA is write-heavy — kills SD cards). |
-| **NAS** — multi-TB drives + enclosure (DIY TrueNAS or Synology), redundancy (ZFS/RAID) | $400–800+ | Bulk storage for music + movies. Drives are the cost driver; connects over the 10G SFP+ backbone. |
+| **NAS** — multi-TB drives + enclosure (DIY TrueNAS or Synology), redundancy (ZFS/RAID) | $400–800+ | Bulk storage for music + movies. Drives are the cost driver; connects over the 10G SFP+ backbone. **⚠️ Must share a VLAN with its primary consumer** — see below. |
 | 2.5G USB NIC / 10G SFP+ DAC | $20–35 | Faster links once multiple streams and large transfers are in play. |
 
 **Software (free):** Home Assistant OS (on the Pi); Jellyfin media server as an LXC on the Dell (uses the i5's Quick Sync for transcoding), mounting the NAS for storage.
+
+> **⚠️ Put the NAS on the same VLAN as whatever reads from it.** Phase 1 measured the CRS326's inter-VLAN routing at **251 Mbps for a single flow** — and a large file copy *is* a single flow, so parallelism does not help it. Across a 10G SFP+ link that is roughly **2.5% of the link**. Same-VLAN traffic is switched by the Marvell chip at line rate and never touches the CPU, so co-locating the NAS and the Dell on one segment is the difference between 10G and 251 Mbps. This is an architectural decision made when the VLAN is assigned, not something tunable afterwards. If cross-VLAN storage access at speed is ever genuinely needed, that is the point at which routing moves off the switch — the OPNsense-on-Dell option deliberately kept open above.
 
 **Documentation tooling — consider here:** **NetBox** as a container stack on the Dell. It covers four of the Network+ 3.1 documentation artifacts in one tool — **IPAM, asset inventory, rack elevations, and cable maps** — and is genuinely used in infrastructure roles, so running it is a portfolio item rather than housekeeping. Deliberately *not* earlier: ten devices do not justify a PostgreSQL-backed DCIM, and maintaining the markdown IP plan by hand first teaches the problem the tool solves rather than just its UI.
 
