@@ -108,9 +108,30 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 |------|------|-----------------|
 | ~~Dell RAM top-up to 64GB~~ — **NOT POSSIBLE, see flag below** | — | The OptiPlex 7070 Micro's board caps at 32GB total (2 slots × 16GB max/slot) — already maxed out from the Phase 0 purchase. No upgrade path exists on this hardware. |
 | Analyst workstation — your **existing desktop** | $0 | SIEM dashboards and investigations want a real screen/keyboard. Same room as the lab; also your out-of-band recovery box. |
-| *(optional)* 2.5G USB NIC (RTL8156) for the Dell | $20 | Faster trunk / second interface as telemetry and traffic grow. |
+| **2.5G USB NIC (RTL8156) for the Dell** | $20 | **Required, not optional — this is the sensor's mirror-receive interface.** See the traffic capture plan below. |
 
 > **⚠️ Flagged 2026-08-13, updated 2026-08-16 — Phase 3 RAM constraint:** the original plan assumed a 64GB RAM upgrade for Wazuh, but the Dell's board hard-caps at 32GB total, and it's already there. Wazuh will have to run within whatever's left of that same fixed 32GB, shared with the website VM and standalone Suricata. **Some headroom came back with the Phase 1 change** — now that the firewall lives on the switch instead of an OPNsense VM on the Dell, only Suricata itself needs Dell RAM (~1-2GB), not OPNsense's own overhead on top of it. Rough budget: ~1-2GB for Suricata, ~1-2GB for the website VM, leaving comfortably more than the original ~24-26GB estimate for Wazuh + Proxmox overhead — likely enough for a constrained single-node deployment (smaller indices, shorter retention). Still worth revisiting before starting Phase 3, with the same three options as before: (1) accept a constrained Wazuh config, (2) give Wazuh its own separate hardware, or (3) check whether this specific board unofficially supports more than 32GB (undocumented, would need community verification first).
+
+### Traffic capture plan — decided 2026-09-01
+
+**The sensor needs its own path to mirrored traffic.** The Dell has a single NIC on ether2 carrying the production trunk; mirroring into that port would mix a copy of everything with live traffic on the same wire, breaking the bridge and doubling its load. A mirror destination needs a dedicated physical interface.
+
+**⚠️ The OptiPlex 7070 Micro has no PCIe slot**, so an internal card is not an option — its M.2 slots take storage and WiFi, not a NIC. **USB is the only way to add a second interface to this machine**, which is what makes the 2.5G USB NIC required rather than a convenience.
+
+**The arrangement:**
+
+| | |
+|---|---|
+| **Mirror source** | **ether1 (WAN)** — everything entering or leaving the network |
+| **Mirror target** | A port taken out of the bridge (one of ether20–24, currently disabled) |
+| **Path to sensor** | That port → cable → USB NIC on the Dell |
+| **Sensor access** | USB device passed through to the sensor VM in Proxmox |
+
+**Mirror the WAN port only.** It is the highest-value monitoring point, and its volume is capped by the ISP plan — so a 1 Gbps mirror destination cannot be oversubscribed. Adding internal ports would risk silent packet loss during exactly the peak-load moments an investigation cares about, since an oversubscribed SPAN drops frames without reporting it.
+
+**⚠️ USB NICs can drop packets under sustained line-rate load.** That weakness is real and does not apply here — a 2.5G adapter has ample headroom for a sub-gigabit WAN feed. It also matters far less in this role than in the one this part was originally bought for: a dropped packet costs a little visibility rather than causing an outage.
+
+**No network TAP, for now.** Gigabit copper uses all four pairs bidirectionally with echo cancellation, so **passive copper TAPs do not exist at that speed** — every gigabit copper TAP is an active, powered device, which would put a new failure point inline on the one uplink the website depends on, for $150–400. **Fibre TAPs are genuinely passive and cheap**, so the decision is deferred to Phase 4 when the SFP+ backbone exists. Port mirroring is adequate until then; the traffic volumes here are nowhere near where SPAN's weaknesses appear.
 
 **Software (free):** Wazuh SIEM (VM); Wazuh agents on VMs/LXCs + desktop; a Windows VM with Sysmon; an isolated **sandbox** (spare firewall port → REMnux/FLARE-VM); Atomic Red Team; MITRE ATT&CK-mapped triage. Stretch: Zeek (SPAN port), Volatility (memory forensics).
 
