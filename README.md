@@ -91,7 +91,7 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 | Part | ~CAD | Why it's needed |
 |------|------|-----------------|
-| *(none required)* | $0 | Everything here is software configured on the Phase 1 gear. |
+| **2.5G USB NIC (RTL8156B)** | $20–35 | **Suricata's mirror-receive interface.** Moved here from Phase 3 — Suricata is a Phase 2 control and needs traffic to inspect, so the NIC that feeds it belongs in the same phase. The 7070 Micro has no PCIe slot, so USB is the only way to add a second interface. Capture plan documented under Phase 3. |
 | *(optional)* Access point — U7 Lite or TP-Link Omada EAP + PoE injector | $100–160 | Only if you want **segmented Wi-Fi** now (SSID → VLAN). Otherwise defer to Phase 4. |
 
 **Software (free):** firewall rules (one-way VLAN boundaries, default-deny); DMZ VLAN 40 for the web VM (inbound 443 only, no lateral access); WireGuard VPN; reverse proxy + Let's Encrypt; Homepage dashboard; bastion LXC; **Suricata** IDS (standalone on the Dell, tapping a mirrored/SPAN port off the switch rather than an OPNsense plugin — same detection capability, decoupled from wherever the firewall lives); SSH-key + MFA hardening.
@@ -108,7 +108,7 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 |------|------|-----------------|
 | ~~Dell RAM top-up to 64GB~~ — **NOT POSSIBLE, see flag below** | — | The OptiPlex 7070 Micro's board caps at 32GB total (2 slots × 16GB max/slot) — already maxed out from the Phase 0 purchase. No upgrade path exists on this hardware. |
 | Analyst workstation — your **existing desktop** | $0 | SIEM dashboards and investigations want a real screen/keyboard. Same room as the lab; also your out-of-band recovery box. |
-| **2.5G USB NIC (RTL8156) for the Dell** | $20 | **Required, not optional — this is the sensor's mirror-receive interface.** See the traffic capture plan below. |
+| ~~2.5G USB NIC (RTL8156)~~ | — | **Moved to Phase 2** — Suricata needs it there. Capture plan retained below, since it governs both phases. |
 
 > **⚠️ Flagged 2026-08-13, updated 2026-08-16 — Phase 3 RAM constraint:** the original plan assumed a 64GB RAM upgrade for Wazuh, but the Dell's board hard-caps at 32GB total, and it's already there. Wazuh will have to run within whatever's left of that same fixed 32GB, shared with the website VM and standalone Suricata. **Some headroom came back with the Phase 1 change** — now that the firewall lives on the switch instead of an OPNsense VM on the Dell, only Suricata itself needs Dell RAM (~1-2GB), not OPNsense's own overhead on top of it. Rough budget: ~1-2GB for Suricata, ~1-2GB for the website VM, leaving comfortably more than the original ~24-26GB estimate for Wazuh + Proxmox overhead — likely enough for a constrained single-node deployment (smaller indices, shorter retention). Still worth revisiting before starting Phase 3, with the same three options as before: (1) accept a constrained Wazuh config, (2) give Wazuh its own separate hardware, or (3) check whether this specific board unofficially supports more than 32GB (undocumented, would need community verification first).
 
