@@ -6,6 +6,14 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 
 ---
 
+## Simulation model
+
+**[homelab-layout.pkt](homelab-layout.pkt)** is a Cisco Packet Tracer model of this network, built to test changes before applying them to live hardware.
+
+**The intent: build and verify here first, then configure the real switch.** A mistake in simulation costs a mouse click; the same mistake on the CRS326 takes down the website.
+
+Packet Tracer has no MikroTik, so the design is modelled in Cisco equivalents — a **3560 multilayer switch** for the CRS326 and a **2960** standing in for the Dell's `vmbr0` bridge. Port numbers match the real switch where they correspond (`Fa0/2` is the trunk, `Fa0/8` the desktop). **Two things do not translate:** IOS access lists are not stateful, so `established/related` behaviour cannot be modelled, and the 3560 cannot do NAT.
+
 ## Phase 0 — Get the website live
 
 **Goal:** Put your Python portfolio site on the internet this week, learn the app + container workflow, and stand the Dell up as the hypervisor that every later phase builds on. Runs on your normal home network behind the XB6 — no networking gear yet.
