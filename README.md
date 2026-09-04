@@ -12,7 +12,14 @@ Guiding choices: **the Dell is the foundation** (Proxmox hypervisor from day one
 
 **The intent: build and verify here first, then configure the real switch.** A mistake in simulation costs a mouse click; the same mistake on the CRS326 takes down the website.
 
-Packet Tracer has no MikroTik, so the design is modelled in Cisco equivalents — a **3560 multilayer switch** for the CRS326 and a **2960** standing in for the Dell's `vmbr0` bridge. Port numbers match the real switch where they correspond (`Fa0/2` is the trunk, `Fa0/8` the desktop). **Two things do not translate:** IOS access lists are not stateful, so `established/related` behaviour cannot be modelled, and the 3560 cannot do NAT.
+Packet Tracer has no MikroTik, so the design is modelled in Cisco equivalents — a **3560 multilayer switch** for the CRS326 and a **2960** standing in for the Dell's `vmbr0` bridge. Port numbers match the real switch where they correspond (`Fa0/2` is the trunk, `Fa0/8` the desktop). **Known gaps between the model and reality, found while building it:**
+
+| Gap | Consequence |
+|---|---|
+| **IOS ACLs are not stateful** | No `established/related`. Return traffic must be permitted explicitly — hence an `echo-reply` permit on the restricted VLANs |
+| **`no ip unreachables` is unsupported in Packet Tracer** | An IOS `deny` sends **ICMP administratively-prohibited**, so the model reports *destination host unreachable* where RouterOS's silent `drop` gives a **timeout**. Same policy, different observable behaviour — and worth remembering, since silence gives an attacker less than a reply does |
+
+**Correction:** the 3560 was initially assumed unable to do NAT. Packet Tracer's implementation does expose `ip nat` interface commands, so the WAN side is modellable — including an inbound ACL representing the traditional "443 only" DMZ, which the live network does not need because its Cloudflare Tunnel is outbound-only.
 
 ## Phase 0 — Get the website live
 
