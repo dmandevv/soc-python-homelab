@@ -22,6 +22,21 @@ Goal: a segmented, routed network built on the MikroTik CRS326 running RouterOS 
 **The loopback test should have come first.** It isolates the cable completely in about two minutes, whereas the session instead worked through drivers, COM ports, baud rates, flow control, two terminal programs, two operating systems, and a reboot test — all of which left cable and switch-port faults indistinguishable. **When a link is dead in one direction, test the cable alone before testing anything it connects to.**
 
 **Next attempt — go two-piece:** a **USB-to-DB9 serial adapter** plus an **RJ45-to-DB9 console adapter**. If the fault is a pinout difference rather than a defect, another Cisco-pinout USB-to-RJ45 cable will fail identically; a separate RJ45-to-DB9 adapter can be selected or re-pinned to match MikroTik, and either half swapped to isolate a future fault.
+
+**The pinout to match — MikroTik's own table** (RouterOS docs, RJ45 serial port on RB2011/3011/4011, CCR1072 and CRS series). It is identical to the Cisco rollover console pinout, so a genuine `CAB-CONSOLE-RJ45` / `72-3383-01` cable is the correct part:
+
+| RJ45 pin | Signal | DB-9 pin | DB-25 pin |
+|---|---|---|---|
+| 1 | RTS | 8 | 5 |
+| 2 | DTR | 6 | 6 |
+| 3 | TxD | 2 | 3 |
+| 4 | Ground | 5 | 7 |
+| 5 | Ground | 5 | 7 |
+| 6 | RxD | 3 | 2 |
+| 7 | DSR | 4 | 20 |
+| 8 | CTS | 7 | 4 |
+
+**MikroTik documents the port default as hardware (RTS/CTS) flow control** — but this switch reports `flow-control=none`, so a 3-conductor cable (TxD, RxD, Ground only) is sufficient here and handshake lines were never the cause. Buy the FTDI half on chipset, not price: counterfeit Prolific PL2303 chips are bricked by the current Windows driver.
 - [ ] Verify MAC-connect is available before every risky change: `/tool mac-server print` and `/tool mac-server mac-winbox print`
 
 > **⚠️ Without a console, three disciplines are mandatory, not optional:**
