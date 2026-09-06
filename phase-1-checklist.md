@@ -11,7 +11,7 @@ Goal: a segmented, routed network built on the MikroTik CRS326 running RouterOS 
 - [ ] Read the ⚠️ **Two ways to lock yourself out** section at the bottom of this file, and install Winbox on the desktop
 - [ ] Confirm the CRS326 is booted into **RouterOS**, not SwOS (it dual-boots; the boot setting decides)
 - [x] **Serial console port confirmed present** — this is the primary recovery path and makes every Layer 3 lockout survivable
-- [x] **Decision: proceeding without a console cable.** Port confirmed present (RJ45, labelled "Console"), but Phase 1 runs on Safe Mode + MAC-connect + config exports instead. Worth buying eventually — a USB-to-RJ45 console cable (~$15–30, FTDI or CH340, **not Prolific PL2303**) is a permanent tool that every later device will need; not a blocker now
+- [x] **Console cable purchased and tested 2026-09-06 — ⚠️ UNRESOLVED.** USB-to-RJ45, genuine FTDI FT232R. **Transmit works; receive does not.** The switch logs serial console login attempts, so keystrokes arrive and the baud rate is correct — but nothing the switch sends is ever displayed. **Ruled out:** driver (status OK, no problem code), COM port, baud rate, flow control (none in both Windows and the terminal), terminal software (PuTTY and Tera Term behave identically), and port contention. **Remaining suspect: the cable's receive line, or a pinout difference on that pin.** Next attempt — a different cable, or a two-piece USB-to-DB9 plus RJ45-to-DB9 adapter, so either half can be swapped independently.
 - [ ] Verify MAC-connect is available before every risky change: `/tool mac-server print` and `/tool mac-server mac-winbox print`
 
 > **⚠️ Without a console, three disciplines are mandatory, not optional:**
@@ -200,7 +200,9 @@ This is acceptable for the Phase 1 goal — building and understanding a segment
 
 Arm it, **test the revert script before relying on it**, make the change without Safe Mode, reconnect, verify, then `/system scheduler remove auto-revert`. If the change is bad, the timer undoes it. Use this pattern for any change whose transition breaks the management path.
 
-**MAC-connect bypasses the IP firewall entirely.** Management from VLAN 20 appeared to work before any rule permitted it, because Winbox was connecting at Layer 2. Anyone with Layer 2 access can attempt MAC-Winbox regardless of firewall rules — acceptable while it is the only safety net, **not acceptable permanently**. Restrict `/tool mac-server` to `vlan10` in Phase 2, once a console cable exists.
+**MAC-connect bypasses the IP firewall entirely.** Management from VLAN 20 appeared to work before any rule permitted it, because Winbox was connecting at Layer 2. Anyone with Layer 2 access can attempt MAC-Winbox regardless of firewall rules — acceptable while it is the only safety net, **not acceptable permanently**. Restrict `/tool mac-server` to `vlan10` in Phase 2 — **but only once a console session has actually produced a prompt.**
+
+**⚠️ The restriction stays deferred while the console is unproven.** Restricting MAC-connect removes the working Layer 2 recovery path, and the serial console was meant to replace it. **Do not give up a recovery path that works for one that has never displayed a character.**
 
 **DHCP and DNS are input-chain traffic.** A default-deny input chain silently blocks clients in every VLAN except the one explicitly permitted — no error, no log, the client simply never receives an address. Match on `in-interface-list` rather than `src-address`, since a DHCP discover originates from `0.0.0.0` and no source-address rule will ever match it.
 
