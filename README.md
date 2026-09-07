@@ -18,8 +18,11 @@ Packet Tracer has no MikroTik, so the design is modelled in Cisco equivalents �
 |---|---|
 | **IOS ACLs are not stateful** | No `established/related`. Return traffic must be permitted explicitly — hence an `echo-reply` permit on the restricted VLANs |
 | **`no ip unreachables` is unsupported in Packet Tracer** | An IOS `deny` sends **ICMP administratively-prohibited**, so the model reports *destination host unreachable* where RouterOS's silent `drop` gives a **timeout**. Same policy, different observable behaviour — and worth remembering, since silence gives an attacker less than a reply does |
+| **The 3560 cannot do NAT** | Verified, not assumed — `ip ?` in interface config mode on Packet Tracer's 3560 lists `access-group`, `address`, `arp`, `helper-address`, `mtu`, `ospf` and others, with **no `nat`**. This matches real hardware: no 3560 feature set supports NAT. **The WAN side is therefore modelled with translation on the XB6 router instead of on the switch** — which is what the real XB6 does anyway, as NAT #1 of the live network's double-NAT. The CRS326's own translation layer has no equivalent in the model |
 
-**Correction:** the 3560 was initially assumed unable to do NAT. Packet Tracer's implementation does expose `ip nat` interface commands, so the WAN side is modellable — including an inbound ACL representing the traditional "443 only" DMZ, which the live network does not need because its Cloudflare Tunnel is outbound-only.
+**⚠️ This entry was wrong once and the wrong version was committed.** An earlier note claimed Packet Tracer exposed `ip nat` on the 3560 and that the WAN side could be modelled on the switch. It cannot. The `ip ?` output above is recorded so the question stays closed.
+
+**Consequence for the model's WAN design:** because XB6 performs the translation rather than the switch, XB6 needs a static route back to `10.10.0.0/16` via `10.0.0.2`. The proof that NAT is working therefore moves one hop outward — **Internet-Host** must have no route into the private space, and traffic must still succeed.
 
 ## Phase 0 — Get the website live
 
