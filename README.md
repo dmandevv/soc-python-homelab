@@ -174,6 +174,35 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 **No network TAP, for now.** Gigabit copper uses all four pairs bidirectionally with echo cancellation, so **passive copper TAPs do not exist at that speed** — every gigabit copper TAP is an active, powered device, which would put a new failure point inline on the one uplink the website depends on, for $150–400. **Fibre TAPs are genuinely passive and cheap**, so the decision is deferred to Phase 4 when the SFP+ backbone exists. Port mirroring is adequate until then; the traffic volumes here are nowhere near where SPAN's weaknesses appear.
 
+### Honeypot, then a small honeynet — wanted 2026-09-08
+
+**Start with one honeypot; a honeynet of several decoys later.** The appeal is that a decoy has **no legitimate traffic**, so any interaction is anomalous by definition — a detection signal with no false-positive problem, which is the opposite of every other sensor in this phase. A honeynet adds the ability to watch **lateral movement** rather than just first contact.
+
+**⚠️ Not before the syslog collector exists.** A honeypot whose alerts go nowhere is an ornament. This sits after telemetry collection, not before it.
+
+**The design requirement is data control, not just data capture.** Capture is recording what the attacker does. **Control is limiting what they can do outbound**, and it is what separates a decoy from a machine you have handed to a stranger. If the honeypot attacks a third party, that is your host and your liability.
+
+| Control | Mechanism |
+|---|---|
+| **Outbound rate limiting** | Permit a few connections per hour and drop the rest — tooling works, a scan or payload does not |
+| **Protocol allow-listing** | Let DNS and HTTP out so the C2 callback is observable; block SMTP so it cannot spam |
+| **Trigger-based isolation** | Any outbound connection to a non-decoy destination disables the port or reverts the VM |
+| **Scheduled snapshot revert** | Roll back to clean on a timer regardless of what happened |
+
+**⚠️ The current firewall is wrong for a decoy, and specifically in one rule.** VLAN 50 already has the right shape — no lateral path, internet only — but `forward` rule 14 permits `vlan50 → ether1` **unrestricted**. That is correct for a workstation being driven by hand and wrong for a machine nobody is supervising. Outbound restriction is the change a honeypot requires.
+
+**⚠️ And it should not share VLAN 50 with the workstation.** A decoy and a machine in daily use do not belong in one broadcast domain, for the same reason the sandbox was not put in the IoT VLAN. A dedicated segment when the time comes.
+
+**Candidate software, against this hardware's RAM ceiling:**
+
+| | Weight | Notes |
+|---|---|---|
+| **OpenCanary** | Very light — LXC | Multiple emulated services, alerts to syslog. **The sensible first one** |
+| **Cowrie** | Light | SSH and Telnet only, but records full attacker sessions including typed commands |
+| **T-Pot** | **8 GB+** | Everything at once with its own dashboards. **Does not fit** alongside Wazuh on a 32 GB box |
+
+**The tension worth knowing before starting:** too much containment and an attacker notices the network is fake and leaves, taking the intelligence with them; too little and you are running an attack platform. Balancing that is most of the work.
+
 **Software (free):** Wazuh SIEM (VM); Wazuh agents on VMs/LXCs + desktop; a Windows VM with Sysmon; an isolated **sandbox** (spare firewall port → REMnux/FLARE-VM); Atomic Red Team; MITRE ATT&CK-mapped triage. Stretch: Zeek (SPAN port), Volatility (memory forensics).
 
 **Rule:** live samples run **only** inside sandbox VMs — never on the bare desktop.
