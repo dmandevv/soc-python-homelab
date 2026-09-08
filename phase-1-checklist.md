@@ -227,6 +227,8 @@ Arm it, **test the revert script before relying on it**, make the change without
 
 **MAC-connect bypasses the IP firewall entirely.** Management from VLAN 20 appeared to work before any rule permitted it, because Winbox was connecting at Layer 2. Anyone with Layer 2 access can attempt MAC-Winbox regardless of firewall rules — acceptable while it is the only safety net, **not acceptable permanently**. Restrict `/tool mac-server` to `vlan10` in Phase 2 — **but only once a console session has actually produced a prompt.**
 
+**⚠️ Open item found 2026-09-07 — the switch broadcasts MNDP into the sandbox.** Building VLAN 50 surfaced MikroTik Neighbor Discovery Protocol traffic on UDP 5678 originating from `10.10.50.1`, meaning the switch announces its identity, model and RouterOS version to the least trusted segment on the network. **Do not disable discovery globally** — Winbox depends on it, and that is one of the three lockout traps recorded above. The fix is restricting `/ip neighbor discovery-settings` to an interface list that excludes `vlan50`, which is safe because management runs from VLAN 20 and is unaffected.
+
 **⚠️ The restriction stays deferred while the console is unproven.** Restricting MAC-connect removes the working Layer 2 recovery path, and the serial console was meant to replace it. **Do not give up a recovery path that works for one that has never displayed a character.**
 
 **DHCP and DNS are input-chain traffic.** A default-deny input chain silently blocks clients in every VLAN except the one explicitly permitted — no error, no log, the client simply never receives an address. Match on `in-interface-list` rather than `src-address`, since a DHCP discover originates from `0.0.0.0` and no source-address rule will ever match it.

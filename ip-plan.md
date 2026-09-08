@@ -27,8 +27,13 @@ Within every /24:
 | **20** | Trusted | `10.10.20.0/24` | `10.10.20.1` | `.100–.200` |
 | **30** | IoT | `10.10.30.0/24` | `10.10.30.1` | `.100–.200` |
 | **40** | DMZ | `10.10.40.0/24` | `10.10.40.1` | **none — static only** |
+| **50** | **Sandbox** | `10.10.50.0/24` | `10.10.50.1` | `.100–.200` |
 | **99** | Native (unused) | — | — | none |
 | — | WAN (ether1) | `10.0.0.0/24` (XB6) | `10.0.0.1` | static `10.0.0.2` |
+
+**VLAN 50 is the sandbox segment**, added 2026-09-07 for a Kali VM used with TryHackMe. It runs security tooling and connects a VPN into deliberately vulnerable networks, so it is the least trusted thing on the lab — **it reaches the internet and nothing else.** It gets its own VLAN rather than sharing VLAN 30 because a smart plug and a machine running Metasploit should not share a broadcast domain once Phase 4 brings real IoT devices.
+
+**Its DHCP hands out an external resolver (1.1.1.1) rather than the switch**, so the sandbox needs no `input`-chain permit at all. One less rule, and one less path from the least trusted segment to the device that enforces every other boundary.
 
 **VLAN 40 runs no DHCP server deliberately.** It holds one web server, which needs a stable address for firewall rules, DNS, and monitoring — and the absence of DHCP means an unauthorised device plugged into a DMZ port receives no address automatically.
 
@@ -44,6 +49,8 @@ Within every /24:
 | `10.10.30.1` | CRS326 — vlan30 gateway | 30 | **Configured** |
 | `10.10.40.1` | CRS326 — vlan40 gateway | 40 | **Configured** |
 | `10.10.40.10` | Website VM — `ens18` | 40 | **Configured** |
+| `10.10.50.1` | CRS326 — vlan50 gateway | 50 | **Planned** |
+| `10.10.50.10` | Debian VM — TryHackMe workstation | 50 | **Planned** |
 
 **The desktop sits on VLAN 20, not VLAN 10, deliberately.** It is a general-purpose machine that browses the web and reads email, which makes it the highest-risk device on the network — and the management VLAN is the segment that can reach every device's management interface. Placing it in VLAN 20 keeps that boundary intact.
 

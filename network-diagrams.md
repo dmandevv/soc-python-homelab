@@ -21,6 +21,7 @@ graph TD
     DELL["<b>Dell OptiPlex 7070</b><br/>Proxmox VE<br/>vmbr0 VLAN-aware"]
     HOST["<b>vmbr0.10</b> — host mgmt<br/>10.10.10.20"]
     VM["<b>Website VM</b><br/>ens18 tag 40<br/>10.10.40.10"]
+    SBX["<b>Sandbox VM</b><br/>ens18 tag 50<br/>10.10.50.10"]
 
     NET --- XB6
     XB6 -->|"yellow"| E1
@@ -39,10 +40,11 @@ graph TD
     subgraph D["the Dell"]
         DELL --- HOST
         DELL --- VM
+        DELL --- SBX
     end
 ```
 
-**Note the single blue cable to the Dell.** It carries the host on VLAN 10 and the website VM on VLAN 40 — two segments that cannot reach each other, over one wire. That fact is invisible here and is the whole point of the second diagram.
+**Note the single blue cable to the Dell.** It carries the host on VLAN 10, the website VM on VLAN 40, and the sandbox VM on VLAN 50 — three segments that cannot reach each other, over one wire. That fact is invisible here and is the whole point of the second diagram.
 
 ### Cable map
 
@@ -67,17 +69,20 @@ graph LR
     V20["<b>VLAN 20 — Trusted</b><br/>10.10.20.0/24<br/>Desktop"]
     V30["<b>VLAN 30 — IoT</b><br/>10.10.30.0/24<br/>empty until Phase 4"]
     V40["<b>VLAN 40 — DMZ</b><br/>10.10.40.0/24<br/>Website VM"]
+    V50["<b>VLAN 50 — Sandbox</b><br/>10.10.50.0/24<br/>Debian VM, TryHackMe"]
     V99["<b>VLAN 99 — Native</b><br/>no address, no devices"]
 
     V10 --- R
     V20 --- R
     V30 --- R
     V40 --- R
+    V50 --- R
     R -->|"NAT via ether1"| WAN
 
     V10 -.->|"permitted"| V20
     V10 -.->|"permitted"| V30
     V10 -.->|"permitted"| V40
+    V10 -.->|"permitted"| V50
     V20 -.->|"TCP 22, 8006<br/>one host only"| V10
 ```
 
@@ -85,14 +90,25 @@ graph LR
 
 ### Traffic policy
 
-| From ↓ To → | Internet | VLAN 10 | VLAN 20 | VLAN 30 | VLAN 40 |
-|---|---|---|---|---|---|
-| **10 Management** | ✅ | — | ✅ | ✅ | ✅ |
-| **20 Trusted** | ✅ | ⚠️ one host, TCP 22/8006 | — | ❌ | ❌ |
-| **30 IoT** | ✅ | ❌ | ❌ | — | ❌ |
-| **40 DMZ** | ✅ | ❌ | ❌ | ❌ | — |
+| From ↓ To → | Internet | VLAN 10 | VLAN 20 | VLAN 30 | VLAN 40 | VLAN 50 |
+|---|---|---|---|---|---|---|
+| **10 Management** | ✅ | — | ✅ | ✅ | ✅ | ✅ |
+| **20 Trusted** | ✅ | ⚠️ one host, TCP 22/8006 | — | ❌ | ❌ | ❌ |
+| **30 IoT** | ✅ | ❌ | ❌ | — | ❌ | ❌ |
+| **40 DMZ** | ✅ | ❌ | ❌ | ❌ | — | ❌ |
+| **50 Sandbox** | ✅ | ❌ | ❌ | ❌ | ❌ | — |
 
 **The asymmetry is deliberate and is what a stateful firewall buys.** Management reaches every segment; nothing reaches management unbidden. A DMZ host can *answer* when spoken to — its replies match `established/related` — but it cannot *initiate* toward anything internal.
+
+**VLAN 50 is the least trusted segment on the network**, added 2026-09-07. It holds a Debian VM used for TryHackMe, which runs security tooling and terminates a VPN into deliberately vulnerable networks. Its policy is the strictest here — **internet only**, with no path to any other VLAN and no `input`-chain permit to the switch beyond DHCP. Its DHCP hands out Cloudflare rather than the switch as resolver, so even DNS gives it no reason to talk to the router.
+
+**It has no untagged port anywhere in the bridge VLAN table.** Nothing can be plugged into the sandbox — membership requires being a VM on a host already trusted to tag for it. That is also why DHCP is acceptable here while the DMZ deliberately runs static-only: the "unauthorised device gets an address" threat has no physical entry point.
+
+**⚠️ Three things this build taught, all worth keeping:**
+
+- **A VLAN-aware Linux bridge has its own allowed-VLAN list, and it fails silently.** Proxmox's uplink carried `10 20 30 40` and dropped VLAN 50 frames at the host, before the wire. Every switch-side check passed and the fault looked like a MikroTik problem for twenty minutes. **`bridge vlan show` on the hypervisor is the command that finds this**, and it belongs early in the sequence, not late.
+- **RouterOS labels MNDP traffic "discovery" in the sniffer, on UDP 5678.** It looks exactly like DHCP discovery at a glance and is nothing of the kind — it is the switch broadcasting its own presence for Winbox. Read the port numbers, not the label.
+- **The switch's own outbound broadcasts appear on a VLAN interface sniff.** Seeing traffic on `vlan50` therefore proves nothing about the inbound direction, which is the opposite of the conclusion it invites.
 
 **VLAN 99 appears in neither routing nor policy**, because the router has no interface in it. It exists solely so the trunk's native VLAN is not VLAN 1, and it holds no devices — leaving a double-tagging attack nowhere to launch from.
 
@@ -109,6 +125,9 @@ Every cell above was tested rather than inferred:
 | Trusted → DMZ | **Dropped** |
 | Trusted → Management, TCP 8006 | **Permitted** — scoped to one address |
 | WAN → switch management | **Dropped** — confirmed from off-network |
+| Sandbox → Proxmox host, Sandbox → Desktop | **Dropped** — timeout, not ICMP unreachable |
+| Sandbox → internet and DNS | **Permitted** |
+| Management → Sandbox | **Permitted** — the asymmetry confirmed from both ends |
 
 ---
 
