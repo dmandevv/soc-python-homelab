@@ -24,6 +24,27 @@ Packet Tracer has no MikroTik, so the design is modelled in Cisco equivalents �
 
 **Consequence for the model's WAN design:** because XB6 performs the translation rather than the switch, XB6 needs a static route back to `10.10.0.0/16` via `10.0.0.2`. The proof that NAT is working therefore moves one hop outward — **Internet-Host** must have no route into the private space, and traffic must still succeed.
 
+## Repo conventions
+
+**This repo is public.** RouterOS `/export` headers carry the switch's serial number and software id, and they get masked before anything is committed:
+
+```
+# software id = ****-****
+# serial number = ***********
+```
+
+**⚠️ That rule was broken once.** `configs/phase1-complete.rsc` was committed unmasked while the three stage exports around it were fine, and the commit was pushed. The values are masked in the working tree now, but **git history still holds them** — a rewrite would break every submodule pointer in `soc-python-journey`, which is a worse trade for a non-credential identifier.
+
+**A `pre-commit` hook now enforces it** rather than relying on remembering. It refuses any commit whose added lines contain an unmasked RouterOS export header, the two values already known to have leaked, a private key block, or a WireGuard private key.
+
+**Enable it after cloning** — hooks are not carried by `git clone`:
+
+```
+git config core.hooksPath .githooks
+```
+
+Bypass with `git commit --no-verify` when you mean to, not by habit.
+
 ## Phase 0 — Get the website live
 
 **Goal:** Put your Python portfolio site on the internet this week, learn the app + container workflow, and stand the Dell up as the hypervisor that every later phase builds on. Runs on your normal home network behind the XB6 — no networking gear yet.

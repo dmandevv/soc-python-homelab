@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Blocks secrets that have leaked from this repo before, or would obviously hurt.
+#
+# Installed with:  git config core.hooksPath .githooks
+# Bypassed with:   git commit --no-verify   (do that deliberately, not reflexively)
+
+set -uo pipefail
+fail=0
+
+report() {
+    printf '\n\033[31mpre-commit: %s\033[0m\n' "$1"
+    printf '%s\n' "$2"
+    fail=1
+}
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# Added lines only — existing history is not re-litigated on every commit.
+# This file excludes itself: it names the leaked values literally in order to
+# match them, and would otherwise refuse to let itself be committed.
+added=$(git diff --cached -U0 --diff-filter=ACM -- . ':(exclude).githooks/pre-commit' \
+        | grep '^+' | grep -v '^+++' || true)
+
+# --- RouterOS export headers, unmasked -------------------------------------
+# A masked header reads "# serial number = ***********". Anything else leaks.
+if printf '%s\n' "$added" | grep -qE '^\+# serial number = [^*]'; then
+    report "unmasked RouterOS serial number" \
+"A /export header still carries the real serial. Mask it before committing:
+
+  sed -i -E 's/^# serial number = .*/# serial number = ***********/' <file>"
+fi
+
+if printf '%s\n' "$added" | grep -qE '^\+# software id = [^*]'; then
+    report "unmasked RouterOS software id" \
+"A /export header still carries the real software id. Mask it before committing:
+
+  sed -i -E 's/^# software id = .*/# software id = ****-****/' <file>"
+fi
+
+# --- The values already known to have leaked -------------------------------
+# Belt and braces: catches them anywhere, not just in an export header.
+for known in 'HM80B1MVKS2' '5ZE0-74LK'; do
+    if printf '%s\n' "$added" | grep -qF "$known"; then
+        report "known-leaked identifier present" \
+"This switch's serial or software id appears in the staged changes.
+It was published once already in configs/phase1-complete.rsc - don't repeat it."
+    fi
+done
+
+# --- Private keys ----------------------------------------------------------
+if printf '%s\n' "$added" | grep -qE 'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY'; then
+    report "private key block" \
+"A private key is in the staged changes. Commit the public half only."
+fi
+
+# WireGuard arrives in Phase 2 and its private keys are bare base64 with no header.
+if printf '%s\n' "$added" | grep -qE '^\+[[:space:]]*(PrivateKey[[:space:]]*=|private-key=)'; then
+    report "WireGuard private key" \
+"Commit the public key and the peer config; keep private keys off the repo."
+fi
+
+if [ "$fail" -ne 0 ]; then
+    printf '\nCommit aborted. Fix the above, or bypass deliberately with --no-verify.\n\n'
+    exit 1
+fi
+exit 0
