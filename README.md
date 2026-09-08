@@ -45,6 +45,8 @@ git config core.hooksPath .githooks
 
 Bypass with `git commit --no-verify` when you mean to, not by habit.
 
+**Incidents are logged in [incidents.md](incidents.md).** Real failures, written up the way a SOC would write them.
+
 ## Phase 0 — Get the website live
 
 **Goal:** Put your Python portfolio site on the internet this week, learn the app + container workflow, and stand the Dell up as the hypervisor that every later phase builds on. Runs on your normal home network behind the XB6 — no networking gear yet.
