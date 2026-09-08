@@ -43,7 +43,17 @@ Verified all three read `off`. Moves segmentation from the NIC to the CPU — a 
 
 ### Action items
 
-- [ ] **Persist the ethtool call** as a `post-up` line in `/etc/network/interfaces`. Runtime-only, so it is lost on the next reboot
+- [x] **Persist the ethtool call.** Done 2026-09-08 — verified across a reboot:
+
+  ```
+  auto nic0
+  iface nic0 inet manual
+          post-up /sbin/ethtool -K nic0 tso off gso off gro off || true
+  ```
+
+  **`auto nic0` is what makes it run.** The interface previously had no `auto` line and was brought up implicitly as a bridge port, which is not a path a `post-up` can be relied on to survive.
+
+  **`|| true` is what makes it safe.** A `post-up` that exits non-zero marks the interface **failed**, so without it a missing or changed `ethtool` would leave the bridge with no uplink — trading a possible intermittent hang for a guaranteed outage on a headless machine. **A tuning step must never be able to prevent the thing it tunes from working.**
 - [ ] **Fix `nut-driver@cyberpower`** — broken since Aug 22, so a power event could not be ruled in or out from logs
 - [ ] **Check for a Dell BIOS update** — several e1000e fixes shipped that way
 - [ ] **Second interface in Phase 2** — the 2.5G USB NIC removes the single-uplink single point of failure
