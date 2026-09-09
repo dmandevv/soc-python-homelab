@@ -65,8 +65,15 @@ It reaches management through **two host-specific firewall exceptions**, both sc
 
 | Chain | Permits |
 |---|---|
-| `input` | The desktop → the switch itself, TCP 22 and 8291 |
-| `forward` | The desktop → VLAN 10, TCP 22 and 8006 |
+| `input` | The desktop → **the switch itself**, TCP 22 and 8291 |
+| `forward` | The desktop → **the bastion**, TCP 22 |
+| `forward` | The desktop → **Proxmox**, TCP 8006 |
+
+**Narrowed 2026-09-09.** The `forward` rule previously permitted the desktop to reach **any host in VLAN 10** on TCP 22. It is now two host-scoped rules, so the desktop can open a shell on the bastion and nothing else — every other destination goes through the jump.
+
+**⚠️ The `input` rule stays direct, deliberately.** It is the recovery path to the switch, and a recovery path must not depend on a container running on a hypervisor behind the thing it recovers. It is earmarked for removal **only** once the console is proven working — see `phase-1-checklist.md`.
+
+**⚠️ `input` is "to the switch"; `forward` is "through the switch".** Adding `dst-address=10.10.10.30` to the `input` rule made it unmatchable — the bastion is not the switch — and silently removed the desktop's ability to open a new session to the switch at all. The existing session survived on `established,related`, which hid it. **Test rule changes with a fresh connection, never the one already open.**
 
 **If the desktop's address ever changes, both rules must be updated**, or management access silently stops working. That coupling is the cost of host-scoped rules, and the reason the address is static rather than leased.
 
