@@ -176,6 +176,28 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 **No network TAP, for now.** Gigabit copper uses all four pairs bidirectionally with echo cancellation, so **passive copper TAPs do not exist at that speed** — every gigabit copper TAP is an active, powered device, which would put a new failure point inline on the one uplink the website depends on, for $150–400. **Fibre TAPs are genuinely passive and cheap**, so the decision is deferred to Phase 4 when the SFP+ backbone exists. Port mirroring is adequate until then; the traffic volumes here are nowhere near where SPAN's weaknesses appear.
 
+### A resolver we control and log — wanted 2026-09-09
+
+**Today the switch is the resolver for VLANs 10-40**, and `/ip dns cache print` is the only visibility — no timestamps, no source attribution, and it ages out. That is enough to see *what* was resolved and never *by whom* or *when*.
+
+**Pi-hole, AdGuard Home, or Unbound in a container**, with per-client logging. Then DNS becomes a monitored feed rather than an unattributed cache.
+
+**⚠️ The DMZ host is the reason this matters most.** Its baseline is small and enumerable — `cloudflared` resolving Cloudflare's edge, `apt` resolving Debian mirrors, an NTP pool, Docker Hub on a pull. **Everything else is an anomaly**, which is the condition anomaly detection actually needs and rarely gets.
+
+**And the architecture forces attacker traffic through it.** The site is published by an outbound tunnel with no inbound ports, so there is nothing to connect *to* — any interactive access has to be initiated from inside as a reverse shell, a beacon, or a tunnel dialling out. **Nearly all of that begins with a DNS lookup.**
+
+What to watch for, roughly in order of likelihood:
+
+| Indicator | Signature |
+|---|---|
+| **C2 domain resolution** | An unknown domain queried **at regular intervals** |
+| **Reverse shell to dynamic DNS** | `duckdns.org`, `no-ip.com`, `ngrok.io` |
+| **Stage-two download** | One or two lookups of an unknown host, then silence |
+| **DGA** | Many pseudo-random domains, high **NXDOMAIN** rate |
+| **DNS exfiltration** | Long base32-style labels under one parent, high volume, TXT or NULL queries |
+
+**⚠️ Note the deliberate asymmetry with VLAN 50.** The sandbox uses an external resolver because its DNS traffic is *noise* — it is supposed to resolve hostile domains. The DMZ uses the switch because its DNS traffic is *signal*. Same decision, opposite answers, and the difference is what the segment is for.
+
 ### Honeypot, then a small honeynet — wanted 2026-09-08
 
 **Start with one honeypot; a honeynet of several decoys later.** The appeal is that a decoy has **no legitimate traffic**, so any interaction is anomalous by definition — a detection signal with no false-positive problem, which is the opposite of every other sensor in this phase. A honeynet adds the ability to watch **lateral movement** rather than just first contact.
