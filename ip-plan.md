@@ -44,6 +44,7 @@ Within every /24:
 | `10.0.0.2` | CRS326 — WAN interface (ether1) | WAN | **Configured** |
 | `10.10.10.1` | CRS326 — vlan10 gateway | 10 | **Configured** |
 | `10.10.10.20` | Proxmox host — `vmbr0.10` | 10 | **Configured** |
+| `10.10.10.30` | Bastion — SSH jump host (LXC) | 10 | **Planned** |
 | `10.10.20.1` | CRS326 — vlan20 gateway | 20 | **Configured** |
 | `10.10.20.50` | Desktop — management station | 20 | **Configured** — see note below |
 | `10.10.30.1` | CRS326 — vlan30 gateway | 30 | **Configured** |
@@ -51,6 +52,12 @@ Within every /24:
 | `10.10.40.10` | Website VM — `ens18` | 40 | **Configured** |
 | `10.10.50.1` | CRS326 — vlan50 gateway | 50 | **Planned** |
 | `10.10.50.10` | Debian VM — TryHackMe workstation | 50 | **Planned** |
+
+**The bastion at `10.10.10.30` exists to stop Proxmox being the jump host.** Reaching another VLAN over SSH currently means jumping through the hypervisor, which already carries `forward` rule 11 and therefore reaches every segment. That works, and it means **one compromise gets the jump host, the hypervisor, and every VM on it** — three things that should be separable.
+
+The bastion has **the same reach and a fraction of the surface**: `sshd` and nothing else, no hypervisor API, no VM disks. Reach reduction — its own VLAN with explicit per-destination permits instead of inheriting rule 11 — is a later refinement.
+
+**⚠️ Jump, rather than adding firewall exceptions per destination.** A firewall rule grants **unauthenticated network reachability** to anything at that source address; a jump host grants **authenticated access** and leaves a login record. Use `ssh -J`, never agent forwarding — ProxyJump authenticates to the final host from the client through a tunnel, so the bastion relays bytes it cannot read.
 
 **The desktop sits on VLAN 20, not VLAN 10, deliberately.** It is a general-purpose machine that browses the web and reads email, which makes it the highest-risk device on the network — and the management VLAN is the segment that can reach every device's management interface. Placing it in VLAN 20 keeps that boundary intact.
 

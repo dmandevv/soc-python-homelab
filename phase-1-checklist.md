@@ -17,9 +17,82 @@ Goal: a segmented, routed network built on the MikroTik CRS326 running RouterOS 
 
 **⚠️ A blind console session does work.** Logging in without seeing a character succeeds — `user admin logged in via local` appears in the log — so **transmit is reliable and commands can be issued unseen.** That is a usable, if uncomfortable, recovery path: a lockout could be undone by typing a command you cannot read.
 
-**One genuine complication found along the way:** serial ports are exclusive, and alternating between two terminal programs was silently stealing the port from one another — the log shows a session dropping the moment the second program claimed it. Much of the apparent intermittency was that, not the cable. **Confirmed by the reboot test:** RouterBOOT prints to the serial console before RouterOS loads, before session logic and before authentication, so nothing but a broken receive path can suppress it — and nothing appeared. **⚠️ Confirmed by loopback test — the fault is the cable, and the switch is exonerated.** With the RJ45 end disconnected from any device and pins 3 and 6 bridged, transmitted characters do not return. The fault is therefore entirely within the cable, independent of what it is plugged into, and is **not** a pinout mismatch or a defect in the switch's console port.
+**One genuine complication found along the way:** serial ports are exclusive, and alternating between two terminal programs was silently stealing the port from one another — the log shows a session dropping the moment the second program claimed it. Much of the apparent intermittency was that, not the cable. **Confirmed by the reboot test:** RouterBOOT prints to the serial console before RouterOS loads, before session logic and before authentication, so nothing but a broken receive path can suppress it — and nothing appeared. **⚠️ SUPERSEDED 2026-09-09 — see the section below.** This paragraph previously concluded that the loopback test had exonerated the switch and proved the cable at fault. **A second, entirely different cable produces the identical symptom**, so that conclusion cannot stand.
 
 **The loopback test should have come first.** It isolates the cable completely in about two minutes, whereas the session instead worked through drivers, COM ports, baud rates, flow control, two terminal programs, two operating systems, and a reboot test — all of which left cable and switch-port faults indistinguishable. **When a link is dead in one direction, test the cable alone before testing anything it connects to.**
+
+## Console, second attempt — 2026-09-09
+
+**Two-piece cable: DTECH USB-to-DB9 (FTDI) plus a Cisco-pinout RJ45-to-DB9 rollover. Same symptom as the first cable — transmit works, receive is dead.**
+
+### What is proven
+
+| Link | Status | Evidence |
+|---|---|---|
+| PC TxD → DB9 3 → RJ45 6 → switch RxD | ✅ **Works** | `/system serial-terminal` displays typed characters byte-for-byte |
+| Console login over serial | ✅ **Works** | Authenticated blind; commands appear in `admin`'s shared history |
+| Command execution over serial | ✅ **Works** | `:log info "blindtest"` typed blind produced the log entry |
+| USB adapter RxD → terminal | ✅ **Works** | Connector-insertion noise arrived as garbage bytes in PuTTY |
+| RJ45 3 → DB9 2 (the return conductor) | ❓ **Unproven** | Cannot be isolated without a meter |
+| The switch's console TX driver | ❓ **Unproven** | Same |
+
+**Everything except one conductor and one driver is confirmed working.**
+
+### Ruled out this session
+
+- **Baud, framing, flow control** — matched at both ends and re-verified
+- **`silent-boot`** — set to `no`, and RouterBOOT still printed nothing at a matched rate
+- **RouterBOOT's own baud rate**, which is a **separate setting** from `/port set serial0 baud-rate` and was not checked in the first attempt
+- **Marginal signalling.** A `\0C` in the log looked like a corrupted `\0D`; it was literally **Ctrl-L**. The switch receives exactly what is sent
+
+### The two things that wasted the most time
+
+**⚠️ Serial ports are exclusive, and this bit three times in one evening.** PuTTY and Tera Term silently steal the port from one another with no error. **One terminal program, and confirm the other's process is gone** — `ttermpro.exe` survives closing its window.
+
+**⚠️ `/system console` must be enabled and holding the port, and it was repeatedly left disabled.** Freeing the port for `serial-terminal` requires `console disable`, and forgetting to re-enable it means every subsequent test runs against a switched-off console. Check `/system console print` for the **`X`** flag and `/port print detail` for `used-by="Serial Console(#0)"` **before** concluding anything.
+
+### To close it
+
+A **multimeter** (~$20) settles it: continuity from RJ45 pin 3 to DB9 pin 2. Or a **second RJ45-to-DB9 adapter** (~$10) settles it by substitution. No further software test can distinguish the two remaining candidates — every test that drives the switch's transmitter is equally silent whether the driver is dead or the wire is open.
+
+---
+
+## Blind recovery card
+
+**The console transmits nothing, but it receives, authenticates, and executes.** That makes it a usable recovery path — verified 2026-09-09, not assumed.
+
+**Technique:**
+
+1. **Press `Ctrl-C` before every command.** You cannot see the line you are editing, so a stray keystroke or a leftover fragment silently malforms the next command. `Ctrl-C` abandons the line and gives a known-empty start. **This is not optional when blind.**
+2. **Paste, do not type.** Right-click pastes in PuTTY. A pasted string cannot be mistyped.
+3. **One command at a time**, then pause.
+4. **Verification is whether access returns.** In a real lockout there is no second channel — that is why the console is being used at all.
+5. **Link LEDs confirm a reboot took.** If they go dark, the login and the command both landed.
+
+**Login sequence, blind:**
+
+```
+Ctrl-C
+admin        <Enter>
+<password>   <Enter>
+Ctrl-C
+```
+
+**The likely lockouts and their one-line undo:**
+
+| Lockout | Paste this |
+|---|---|
+| Firewall `input` drop rule locked you out | `/ip firewall filter disable [find chain=input action=drop]` |
+| VLAN filtering broke the trunk | `/interface bridge set bridge1 vlan-filtering=no` |
+| Management gateway address wrong | `/ip address set [find interface=vlan10] address=10.10.10.1/24` |
+| SSH disabled | `/ip service enable [find name=ssh]` |
+| Winbox disabled | `/ip service enable [find name=winbox]` |
+| The `management LAN` rule broke after tightening | `/ip firewall filter disable [find comment="management LAN"]` |
+| Anything unpersisted | `/system reboot` then `y` on the next line |
+
+**⚠️ `/system reboot` prompts `[y/N]` invisibly.** The `y` goes on its own line. Forgetting it means nothing happens and you will assume the console failed.
+
+**Rehearse it now while Winbox still works.** Type a command blind in PuTTY, read the result in the Winbox terminal — `admin`'s command history is shared between sessions, so both show the same buffer. That rehearsal channel is exactly what will be missing during a real lockout, which is the reason to use it beforehand.
 
 **Next attempt — go two-piece:** a **USB-to-DB9 serial adapter** plus an **RJ45-to-DB9 console adapter**. If the fault is a pinout difference rather than a defect, another Cisco-pinout USB-to-RJ45 cable will fail identically; a separate RJ45-to-DB9 adapter can be selected or re-pinned to match MikroTik, and either half swapped to isolate a future fault.
 
