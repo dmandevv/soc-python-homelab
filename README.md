@@ -139,6 +139,45 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 > **RA Guard — added 2026-09-01.** Any device can send IPv6 Router Advertisements, and hosts accept them without authentication — so a malicious or misconfigured machine advertising itself as a router silently redirects traffic through itself. It is the IPv6 equivalent of a rogue DHCP server, and it works even on a network not intentionally running IPv6, since hosts autoconfigure regardless. The switch already exposes the controls (`ra-guard` on the bridge, `trusted-ra` per port); they are currently off. Enable RA Guard on every access port and mark only genuine router ports as trusted.
 
+### Prove the UPS actually shuts the host down — added 2026-09-09
+
+**NUT reads the UPS and is configured to halt the host, and that path has never fired.** Verified 2026-09-09: `upsc` returns full data, `upsmon.conf` carries a valid `MONITOR` line with `SHUTDOWNCMD` and `MODE=standalone`, and the service is enabled and running. **All of that proves it can read a UPS. None of it proves it will shut anything down.**
+
+**Two stages, and only the second is disruptive.**
+
+**Stage 1 — detection, non-destructive.** Pull the UPS mains lead for ~30 seconds:
+
+```
+watch -n1 'upsc cyberpower ups.status'
+journalctl -u nut-monitor -f
+```
+
+`OL` → `OB` (On Line → On Battery) and a logged transition. Plug back in, returns to `OL`. Proves detection and notification; proves nothing about shutdown.
+
+**Stage 2 — the real test.** Force the shutdown rather than draining the battery for 50 minutes:
+
+```
+upsmon -c fsd
+```
+
+`fsd` is Forced ShutDown — it sets the flag and runs `SHUTDOWNCMD` exactly as a genuine low-battery event would.
+
+**⚠️ This actually halts the host. The website goes down. Schedule it.**
+
+What to confirm afterwards:
+
+| Check | Why |
+|---|---|
+| Every guest shut down **cleanly**, not killed | A hypervisor that halts without stopping its VMs is only half a graceful shutdown |
+| `/etc/killpower` was created | The flag telling NUT this was a power event |
+| The UPS cut output after `ups.delay.shutdown` (20 s) | The other half — the UPS must actually remove power, or the host reboots into the same dying battery |
+| **The host powered itself back on when mains returned** | See below |
+| Guests came back — everything needs `onboot: 1` | Two guests were found stopped after the Sep 8 outage |
+
+**⚠️ The step most people miss is in the BIOS, not in NUT.** The Dell's *AC Power Recovery* setting decides what happens when power returns. If it is **Off** or **Last State**, the host stays down after the UPS cuts and restores — so the graceful shutdown works perfectly and nothing comes back until someone presses the button.
+
+**Set it to Power On**, and check it while doing the pending BIOS update rather than as a separate trip to the machine.
+
 **Milestone:** a hardened, segmented perimeter with a live public service generating real-world traffic.
 
 ---
