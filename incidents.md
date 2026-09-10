@@ -54,7 +54,19 @@ Verified all three read `off`. Moves segmentation from the NIC to the CPU — a 
   **`auto nic0` is what makes it run.** The interface previously had no `auto` line and was brought up implicitly as a bridge port, which is not a path a `post-up` can be relied on to survive.
 
   **`|| true` is what makes it safe.** A `post-up` that exits non-zero marks the interface **failed**, so without it a missing or changed `ethtool` would leave the bridge with no uplink — trading a possible intermittent hang for a guaranteed outage on a headless machine. **A tuning step must never be able to prevent the thing it tunes from working.**
-- [ ] **Fix `nut-driver@cyberpower`** — broken since Aug 22, so a power event could not be ruled in or out from logs
+- [x] **`nut-driver@cyberpower`** — **resolved, and it was not what it looked like.** Verified 2026-09-09.
+
+  **It had already fixed itself.** The Aug 22 failures were historical; the service came up cleanly at the Sep 8 reboot and had been running 24 hours by the time it was checked. Reading a failure at the *start* of a 17-day boot and assuming it was still true is the same mistake as reading the head of `journalctl -b -1` instead of the tail.
+
+  **⚠️ Power still could not have been ruled out for the outage** — that part stands. `upsmon` reads the UPS, but nothing was recording its state anywhere durable.
+
+  Confirmed working end to end: `upsc cyberpower` returns full data (`ups.status: OL`, 100% charge, **~53 min runtime at 15% load**), and `upsmon.conf` carries a valid `MONITOR` line with `SHUTDOWNCMD` and `MODE=standalone`, so a power cut triggers a real shutdown rather than only a notification.
+
+  **⚠️ Two gotchas found while rotating the monitoring password:**
+  - **NUT treats `#` as a comment character mid-line.** A password containing one truncates silently, leaving a four-field `MONITOR` line that NUT rejects as "old-style ... without a username" — an error naming the symptom and not the cause. **Space and `"` break it the same way**; quote the value if it must contain them.
+  - **systemd stops retrying after five failures.** `systemctl restart` is then refused with "Start request repeated too quickly" until `systemctl reset-failed` clears the counter — a state where the config is correct and the service still will not launch.
+
+  **Not yet tested: the shutdown itself.** Pulling the UPS mains lead for 30 seconds proves detection (`OL` → `OB`) and is non-destructive. Proving the shutdown fires means letting it actually halt the host — worth doing deliberately, on an evening when the website being down does not matter.
 - [ ] **Check for a Dell BIOS update** — several e1000e fixes shipped that way
 - [ ] **Second interface in Phase 2** — the 2.5G USB NIC removes the single-uplink single point of failure
 - [ ] **Syslog collector** — reinforces the existing Phase 3 item
