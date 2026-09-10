@@ -148,7 +148,7 @@ Ctrl-C
 - [x] Set a strong admin password: `/user set admin password="..."`
 - [x] Disable unused services: `/ip service print` then `/ip service disable telnet,ftp,www,api,api-ssl` — **keep ssh and winbox**
 
-> **⚠️ Three hardening steps the standard MikroTik guides recommend that would lock you out right now.** Do **not** restrict `/tool mac-server` (that is MAC-connect, the safety net until the console cable arrives), do **not** disable `/ip neighbor discovery-settings` (that is how Winbox finds the switch), and do **not** set `/ip service set winbox address=10.10.10.0/24` before VLAN 10 exists. All three belong after §2.
+> **⚠️ Three hardening steps the standard MikroTik guides recommend that would lock you out right now.** Do **not** restrict `/tool mac-server` (that is MAC-connect, the safety net — narrowed but deliberately kept, see the end of this file), do **not** disable `/ip neighbor discovery-settings` (that is how Winbox finds the switch), and do **not** set `/ip service set winbox address=10.10.10.0/24` before VLAN 10 exists. All three belong after §2.
 
 > **CLI note:** `/ip service` only *enters* the menu. Commands like `print`, `set`, and `disable` are run inside it. `..` goes back up. Same pattern for every menu in RouterOS.
 
@@ -298,11 +298,37 @@ This is acceptable for the Phase 1 goal — building and understanding a segment
 
 Arm it, **test the revert script before relying on it**, make the change without Safe Mode, reconnect, verify, then `/system scheduler remove auto-revert`. If the change is bad, the timer undoes it. Use this pattern for any change whose transition breaks the management path.
 
-**MAC-connect bypasses the IP firewall entirely.** Management from VLAN 20 appeared to work before any rule permitted it, because Winbox was connecting at Layer 2. Anyone with Layer 2 access can attempt MAC-Winbox regardless of firewall rules — acceptable while it is the only safety net, **not acceptable permanently**. Restrict `/tool mac-server` to `vlan10` in Phase 2 — **but only once a console session has actually produced a prompt.**
+**MAC-connect bypasses the IP firewall entirely.** Management from VLAN 20 appeared to work before any rule permitted it, because Winbox was connecting at Layer 2. **Anyone with Layer 2 access can attempt MAC-Winbox regardless of firewall rules.**
 
 **⚠️ Open item found 2026-09-07 — the switch broadcasts MNDP into the sandbox.** Building VLAN 50 surfaced MikroTik Neighbor Discovery Protocol traffic on UDP 5678 originating from `10.10.50.1`, meaning the switch announces its identity, model and RouterOS version to the least trusted segment on the network. **Do not disable discovery globally** — Winbox depends on it, and that is one of the three lockout traps recorded above. The fix is restricting `/ip neighbor discovery-settings` to an interface list that excludes `vlan50`, which is safe because management runs from VLAN 20 and is unaffected.
 
-**⚠️ The restriction stays deferred while the console is unproven.** Restricting MAC-connect removes the working Layer 2 recovery path, and the serial console was meant to replace it. **Do not give up a recovery path that works for one that has never displayed a character.**
+### Resolved 2026-09-09 — narrowed rather than deferred
+
+**The console is no longer being pursued as a recovery path.** Two cables, two evenings, and it transmits but has never displayed a character. It stays connected and remains usable **blind** — see the recovery card above — but the plan of "restrict MAC-connect once the console works" is abandoned rather than pending.
+
+**So MAC-connect stays available from the desktop**, because without a console it is the only path that survives a broken IP configuration — a wrong address, a bad firewall rule, a VLAN filtering mistake. `input` rule 6 stays for the same reason.
+
+**⚠️ But `allowed-interface-list=all` was the real exposure, and that is fixed.** `all` included **`ether1`** — so anything on the XB6's `10.0.0.0/24` could attempt MAC-Winbox at Layer 2, **bypassing every firewall rule on the device**. It also included the DMZ and the sandbox.
+
+```
+/interface list add name=mac-recovery comment="MAC-connect: recovery paths only"
+/interface list member add list=mac-recovery interface=vlan20
+/interface list member add list=mac-recovery interface=vlan10
+/tool mac-server set allowed-interface-list=mac-recovery
+/tool mac-server mac-winbox set allowed-interface-list=mac-recovery
+/tool mac-server ping set enabled=no
+```
+
+| Path | Before | After |
+|---|---|---|
+| **WAN → MAC-connect** | **Open** | **Closed** |
+| DMZ → MAC-connect | Open | **Closed** |
+| Sandbox → MAC-connect | Open | **Closed** |
+| Desktop → MAC-connect | Open | **Kept — it is the fallback** |
+
+**⚠️ Test MAC-Winbox from the desktop before closing any session.** Winbox → Neighbors → connect by MAC rather than IP. Failing that check means the fallback is gone and the only thing left is a console that does not display.
+
+**The lesson worth keeping:** the deferral was written as all-or-nothing — restrict everything, or nothing, once the console works. **Most of the benefit was in the half that cost nothing.** Closing the WAN, DMZ and sandbox paths never depended on the console at all, and waiting on it left a Layer 2 bypass open from the internet-facing side for weeks.
 
 **DHCP and DNS are input-chain traffic.** A default-deny input chain silently blocks clients in every VLAN except the one explicitly permitted — no error, no log, the client simply never receives an address. Match on `in-interface-list` rather than `src-address`, since a DHCP discover originates from `0.0.0.0` and no source-address rule will ever match it.
 
