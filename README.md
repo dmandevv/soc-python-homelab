@@ -145,7 +145,13 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 **⚠️ Configured but not demonstrated.** Nothing on this network sends RAs, so the guard has never been observed dropping one. **Proving it belongs in the audit block** — send an RA from the sandbox VM (`rdisc6` or `radvd`) and confirm hosts in other VLANs do not pick it up. A control that is configured and a control that is proven are different states, and this one is the first.
 
-**⚠️ `dhcp-snooping` and `dhcpv6-snooping` are still `no`**, sitting in the same `print detail` output. DHCP snooping is the IPv4 equivalent, and rogue DHCP is the attack it stops. The switch's own DHCP servers reply from the bridge rather than ingressing a port, so enabling it with no trusted ports *should* be safe — **but its blast radius is every device on every VLAN, so it needs its own session and a lease-renewal test.**
+**✅ `dhcp-snooping` enabled 2026-09-11**, with `dhcpv6-snooping` alongside it. **No trusted ports were needed** — all three DHCP servers are the router itself, replying from the CPU rather than ingressing a bridge port, so anything on `ether2` or `ether8` claiming to be a server is now dropped.
+
+**The risk turned out to be far smaller than first assessed.** The earlier note warned the blast radius was every device on every VLAN. That was true of the *servers* and not the *clients*: Proxmox, the bastion, the syslog collector, the website VM and the desktop are all static, and **the sandbox is the only DHCP client on the network.** One VM in a VLAN by itself was the entire test surface. Verified by restarting it and confirming it still received `10.10.50.10`.
+
+**`dhcp-vlan10` was also removed** after the rule 3 audit, so nothing hands out addresses on the management segment at all.
+
+**Together with RA Guard, that is the full set:** rogue routers, rogue IPv4 servers, rogue IPv6 servers.
 
 ### Prove the UPS actually shuts the host down — added 2026-09-09
 
