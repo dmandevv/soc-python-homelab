@@ -221,6 +221,34 @@ What to confirm afterwards:
 
 **No network TAP, for now.** Gigabit copper uses all four pairs bidirectionally with echo cancellation, so **passive copper TAPs do not exist at that speed** — every gigabit copper TAP is an active, powered device, which would put a new failure point inline on the one uplink the website depends on, for $150–400. **Fibre TAPs are genuinely passive and cheap**, so the decision is deferred to Phase 4 when the SFP+ backbone exists. Port mirroring is adequate until then; the traffic volumes here are nowhere near where SPAN's weaknesses appear.
 
+### Syslog collector — ✅ built 2026-09-10
+
+**The prerequisite for everything else in this phase.** The switch's log lives in RAM and rotates away within hours; the 2026-09-08 outage proved the cost, with every log needed to diagnose it trapped on the machine that could not be reached.
+
+**Unprivileged Debian LXC at `10.10.10.40`**, VLAN 10, 16 GB disk, `onboot=1` with `startup order=1,up=15` so it is listening before anything that logs to it starts.
+
+**The working configuration**, after several wrong turns:
+
+| Setting | Value | Why |
+|---|---|---|
+| `remote-protocol` | **`tcp`** | UDP syslog has no delivery guarantee, no retry and no buffer — a message sent while the collector is down is gone silently |
+| `remote-log-format` | **`syslog`** | v7 accepts `default`, `syslog`, `cef`. **Not `bsd-syslog`** — that is a v6 value |
+| `syslog-time-format` | **`iso8601`** | Carries the UTC offset |
+| Collector side | `imtcp` + `imudp` on 514, per-host files via `dynaFile`, `stop` to prevent duplication | |
+| Retention | logrotate daily, 30 days, compressed, with `postrotate` signalling rsyslog | |
+
+**⚠️ Four things learned the hard way, all worth keeping:**
+
+**RouterOS 7 hides properties that do not apply to the current mode.** `syslog-facility`, `syslog-severity` and `syslog-time-format` **do not appear in `print detail` until `remote-log-format=syslog` is set**. Their absence looks like "this version does not support it" and is not.
+
+**BSD syslog timestamps carry no timezone, so the receiver assumes its own.** The switch sent local time, the collector was in UTC, and messages arrived stamped `20:53+00:00` when the real time was 20:53 **PDT**. Neither end was broken — the format is lossy. `iso8601` fixes it by carrying the offset.
+
+**TCP is a byte stream with no message boundaries.** A format that works over UDP — one datagram, one message — can leave rsyslog holding bytes and waiting for a terminator that never comes. **Connection established, data arriving, nothing written** is the signature.
+
+**logrotate renames; it does not move the writer.** A file descriptor follows the **inode**, not the name, so without the `postrotate` signal rsyslog keeps writing into the archive and the new log stays empty forever. Silent, and one of the most common log-pipeline failures there is.
+
+**Still to do:** only the switch ships logs. Proxmox, the VMs, the bastion and the sandbox do not yet. **And the collector cannot alert on its own full disk** — the alert would go to itself. That check belongs somewhere else.
+
 ### A resolver we control and log — wanted 2026-09-09
 
 **Today the switch is the resolver for VLANs 10-40**, and `/ip dns cache print` is the only visibility — no timestamps, no source attribution, and it ages out. That is enough to see *what* was resolved and never *by whom* or *when*.

@@ -44,7 +44,8 @@ Within every /24:
 | `10.0.0.2` | CRS326 — WAN interface (ether1) | WAN | **Configured** |
 | `10.10.10.1` | CRS326 — vlan10 gateway | 10 | **Configured** |
 | `10.10.10.20` | Proxmox host — `vmbr0.10` | 10 | **Configured** |
-| `10.10.10.30` | Bastion — SSH jump host (LXC) | 10 | **Planned** |
+| `10.10.10.30` | Bastion — SSH jump host (LXC) | 10 | **Configured** |
+| `10.10.10.40` | Syslog collector (LXC) | 10 | **Configured** |
 | `10.10.20.1` | CRS326 — vlan20 gateway | 20 | **Configured** |
 | `10.10.20.50` | Desktop — management station | 20 | **Configured** — see note below |
 | `10.10.30.1` | CRS326 — vlan30 gateway | 30 | **Configured** |
@@ -58,6 +59,10 @@ Within every /24:
 The bastion has **the same reach and a fraction of the surface**: `sshd` and nothing else, no hypervisor API, no VM disks. Reach reduction — its own VLAN with explicit per-destination permits instead of inheriting rule 11 — is a later refinement.
 
 **⚠️ Jump, rather than adding firewall exceptions per destination.** A firewall rule grants **unauthenticated network reachability** to anything at that source address; a jump host grants **authenticated access** and leaves a login record. Use `ssh -J`, never agent forwarding — ProxyJump authenticates to the final host from the client through a tunnel, so the bastion relays bytes it cannot read.
+
+**The syslog collector at `10.10.10.40` is the Phase 3 prerequisite.** The switch's log lives in RAM and rotates away within hours, and the 2026-09-08 outage proved the cost: every log needed to diagnose it sat on the machine that could not be reached, and none of it was readable until after recovery.
+
+**⚠️ A log collector is a high-value target** — it holds the evidence, and an attacker who reaches it can delete their own traces. On VLAN 10 it inherits rule 12's reach to every segment, the same as Proxmox and the bastion. **The stricter design is a segment that can receive on 514 and initiate nothing**, so logs flow one way. Revisit when Phase 3 makes it worth the work.
 
 **The desktop sits on VLAN 20, not VLAN 10, deliberately.** It is a general-purpose machine that browses the web and reads email, which makes it the highest-risk device on the network — and the management VLAN is the segment that can reach every device's management interface. Placing it in VLAN 20 keeps that boundary intact.
 

@@ -69,7 +69,7 @@ Verified all three read `off`. Moves segmentation from the NIC to the CPU — a 
   **Not yet tested: the shutdown itself.** Pulling the UPS mains lead for 30 seconds proves detection (`OL` → `OB`) and is non-destructive. Proving the shutdown fires means letting it actually halt the host — worth doing deliberately, on an evening when the website being down does not matter.
 - [ ] **Check for a Dell BIOS update** — several e1000e fixes shipped that way
 - [ ] **Second interface in Phase 2** — the 2.5G USB NIC removes the single-uplink single point of failure
-- [ ] **Syslog collector** — reinforces the existing Phase 3 item
+- [x] **Syslog collector** — ✅ built 2026-09-10. rsyslog LXC at `10.10.10.40`, switch shipping over TCP with ISO 8601 timestamps, per-host files, 30-day rotation. **The gap this incident exposed is closed for the switch** — not yet for Proxmox or the VMs. Details in the README
 
 ### Lessons
 
