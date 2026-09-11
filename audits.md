@@ -51,7 +51,17 @@ This **widens** the sandbox-only MNDP finding recorded during the VLAN 50 build.
 
 **Consequence: the topology cannot be verified from the device's own perspective.** This map was built from configuration and ARP, which is inference; LLDP would make it evidence.
 
-**Remediation:** `apt install lldpd` on Proxmox. Low effort, and it makes the topology self-documenting and the next run of this audit repeatable.
+**Remediation attempted and reversed, same day.** `lldpd` was installed on Proxmox and then removed. Two reasons, both worth keeping:
+
+**⚠️ LLDP cannot cross this trunk, and the trunk is right.** `ether2` is `admit-only-vlan-tagged`; LLDP frames are **untagged**. The switch discards them at ingress, and has no untagged egress on that port either, so **neither direction works**. Confirmed: `lldpcli show interfaces` showed `nic0` transmitting while `/ip neighbor print` stayed empty.
+
+**Loosening the trunk to admit untagged frames would fix discovery and reopen double tagging.** That is not a trade worth making. **Two good practices genuinely conflict here and the security one wins.**
+
+**⚠️ And it introduced an exposure that did not previously exist.** `lldpd` advertises on every interface by default, including Proxmox's per-VM firewall bridges — so the hypervisor was broadcasting its **hostname, exact kernel and Proxmox version, and management IP** onto the DMZ bridge and the sandbox bridge. Its only visible output was six self-loop neighbours through its own `fwbr*` veth pairs.
+
+The website VM is the one machine with an inbound path from the internet. Handing a compromised web server the hypervisor's management address and a precise kernel version to look up is a poor trade for a discovery protocol that was not working.
+
+**Outcome: removed.** A control that delivers no benefit and some exposure gets removed rather than tuned. **The topology map therefore remains inference rather than evidence** — acceptable on a network with three cables, and recorded as a real limitation rather than an oversight.
 
 #### 4. The SFP+ ports are not bridge members
 
@@ -62,6 +72,22 @@ This **widens** the sandbox-only MNDP finding recorded during the VLAN 50 build.
 #### 5. `sandbox-thm` has no `onboot`
 
 Confirmed as the reason it was found stopped on 2026-09-10. **Worth deciding deliberately rather than leaving implicit** — a sandbox that runs only when in use is defensible, but then a stale ARP entry is expected behaviour rather than a symptom.
+
+#### 7. The hypervisor has an unused wireless interface
+
+`lldpcli show interfaces` surfaced **`wlo1`** on the Dell, with the chassis advertising `Capability: Wlan, on`.
+
+**Checked immediately, because a dual-homed hypervisor would be the most significant finding in this audit** — a live wireless association to the XB6 would be a route around every VLAN boundary, every firewall rule, the bastion, and the narrowed management access, all of which assume traffic to the Dell crosses `ether2`.
+
+```
+wlo1  DOWN  ac:67:5d:0e:2d:74  <BROADCAST,MULTICAST>
+```
+
+**Down, no address, no carrier. The hypervisor is single-homed as designed.**
+
+**Recorded as latent rather than closed.** "Nobody configured it" is a weaker guarantee than "it cannot come up" — the same reasoning being applied to fifteen unused switch ports applies to an unused radio in the machine running every service.
+
+**Remediation:** disable the WLAN radio in the BIOS, bundled with the pending `e1000e` firmware update and the AC Power Recovery setting the UPS shutdown test needs. Three things, one trip to the machine. Blacklisting the kernel module is the software alternative.
 
 #### 6. A dynamic VLAN 1 exists
 
@@ -90,9 +116,10 @@ An audit listing only problems misrepresents the system. These were checked and 
 
 ### Action items
 
-- [ ] **Disable unused access ports** — `ether4-7`, `ether9-19`
-- [ ] **Scope neighbour discovery** to an interface list of `vlan10` and `vlan20`
-- [ ] **Install `lldpd` on Proxmox** so the next audit can verify topology rather than infer it
+- [x] **Disable unused access ports** — `ether4-7`, `ether9-19`
+- [x] **Scope neighbour discovery** to an interface list of `vlan10` and `vlan20`
+- [x] ~~Install `lldpd` on Proxmox~~ — **attempted and reversed.** Incompatible with the trunk, and it leaked hypervisor details to the DMZ and sandbox. See finding 3
+- [ ] **Disable the Dell's WLAN radio in the BIOS** — with the `e1000e` firmware update and AC Power Recovery, in one visit
 - [ ] **Decide `onboot` for `sandbox-thm`** either way, deliberately
 - [ ] Consider aligning `bridge1`'s PVID with native VLAN 99
 
