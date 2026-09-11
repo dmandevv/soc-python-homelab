@@ -71,9 +71,13 @@ The website VM is the one machine with an inbound path from the internet. Handin
 
 #### 5. `sandbox-thm` has no `onboot`
 
-Confirmed as the reason it was found stopped on 2026-09-10. **Worth deciding deliberately rather than leaving implicit** — a sandbox that runs only when in use is defensible, but then a stale ARP entry is expected behaviour rather than a symptom.
+Confirmed as the reason it was found stopped on 2026-09-10.
 
-#### 6. A dynamic VLAN 1 exists
+**✅ Not a finding — a deliberate choice, confirmed 2026-09-11.** The sandbox terminates a VPN into TryHackMe's network and runs security tooling. `onboot=1` would bring that tunnel up unattended after every reboot and leave it up with nobody watching. **Starting it by hand ties the hostile-network connection to someone being present.**
+
+The cost is a stale ARP entry and occasionally finding it stopped — which is only confusing when it is undocumented, which it no longer is.
+
+#### 6. A dynamic VLAN 1 exists — ✅ resolved
 
 `added by pvid` — `bridge1` itself carries PVID 1, so VLAN 1 exists with the bridge untagged in it. Harmless, and inconsistent with native VLAN 99 everywhere else.
 
@@ -117,11 +121,11 @@ An audit listing only problems misrepresents the system. These were checked and 
 ### Action items
 
 - [x] **Disable unused access ports** — done 2026-09-11. `ether4-7` and `ether9-19` disabled; `ether1`, `ether2`, `ether3` and `ether8` verified still up
-- [x] **Scope neighbour discovery** to an interface list of `vlan10` and `vlan20`
+- [x] **Scope neighbour discovery** — done 2026-09-11. Interface list containing `vlan10` and `vlan20`; the WAN, IoT, DMZ and sandbox no longer receive advertisements
 - [x] ~~Install `lldpd` on Proxmox~~ — **attempted and reversed.** Incompatible with the trunk, and it leaked hypervisor details to the DMZ and sandbox. See finding 3
 - [ ] **Disable the Dell's WLAN radio in the BIOS** — with the `e1000e` firmware update and AC Power Recovery, in one visit
-- [ ] **Decide `onboot` for `sandbox-thm`** either way, deliberately
-- [ ] Consider aligning `bridge1`'s PVID with native VLAN 99
+- [x] **`onboot` for `sandbox-thm`** — deliberately left off. The VPN into a hostile network should not come up unattended
+- [x] **`bridge1` PVID aligned to 99** — done 2026-09-11, and `bridge1` added untagged to the static VLAN 99 entry so the dynamic row disappeared. VLAN 1 was inert (no port could reach it), but **VLAN 1 is where future accidents land** — a new or re-enabled port defaults to PVID 1 — so keeping the CPU port out of it matches the Phase 1 decision to avoid VLAN 1 as native
 
 ### Lesson
 
