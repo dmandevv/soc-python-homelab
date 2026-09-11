@@ -1,8 +1,10 @@
-# Network Diagrams — Phase 1
+# Network Diagrams
 
-Two views of the same network. **Each hides what the other shows:** the physical view draws one cable to the Dell, while the logical view draws two isolated segments — both are true, and neither diagram can express the other's fact.
+Two views of the same network. **Each hides what the other shows:** the physical view draws one cable to the Dell, while the logical view draws four isolated segments behind it — both are true, and neither diagram can express the other's fact.
 
 Kept as Mermaid so they render on GitHub and still diff as text in git.
+
+**⚠️ Rebuilt 2026-09-11 from observed state**, not from memory — `/interface print`, `/interface bridge port print`, `/interface bridge vlan print`, `/ip address print`, `/ip arp print`, and the Proxmox guest configs. Findings from that audit are in [audits.md](audits.md).
 
 ---
 
@@ -11,50 +13,72 @@ Kept as Mermaid so they render on GitHub and still diff as text in git.
 ```mermaid
 graph TD
     NET([Internet])
-    XB6["<b>XB6</b><br/>modem / router / Wi-Fi<br/>10.0.0.1"]
-    E1["<b>ether1</b> — WAN<br/>10.0.0.2/24 static"]
-    E2["<b>ether2</b> — trunk<br/>tagged 10,20,30,40"]
-    E3["<b>ether3</b> — trunk<br/>reserved for AP (Phase 4)"]
-    E8["<b>ether8</b> — access<br/>VLAN 20"]
-    EU["<b>ether20-24</b><br/>disabled"]
+    XB6["<b>XB6</b><br/>modem · router · Wi-Fi<br/>10.0.0.1"]
     DESK["<b>Desktop</b><br/>10.10.20.50"]
-    DELL["<b>Dell OptiPlex 7070</b><br/>Proxmox VE<br/>vmbr0 VLAN-aware"]
-    HOST["<b>vmbr0.10</b> — host mgmt<br/>10.10.10.20"]
-    VM["<b>Website VM</b><br/>ens18 tag 40<br/>10.10.40.10"]
-    SBX["<b>Sandbox VM</b><br/>ens18 tag 50<br/>10.10.50.10"]
+
+    subgraph SW["CRS326-24G-2S+IN · RouterOS 7.24.1"]
+        E1["<b>ether1</b> · WAN, routed<br/>10.0.0.2/24<br/><i>outside the bridge</i>"]
+        E2["<b>ether2</b> · trunk<br/>tagged 10,20,30,40,50<br/>PVID 99"]
+        E3["<b>ether3</b> · trunk<br/><i>reserved — AP, Phase 4</i>"]
+        E8["<b>ether8</b> · access<br/>VLAN 20"]
+        EUN["<b>ether4-7, 9-24</b><br/><i>unused access ports</i>"]
+        SFP["<b>sfp-sfpplus1-2</b><br/><i>not bridge members</i>"]
+    end
+
+    subgraph D["Dell OptiPlex 7070 · Proxmox VE"]
+        VMBR["<b>vmbr0</b><br/>VLAN-aware bridge"]
+        HOST["<b>vmbr0.10</b> · host<br/>10.10.10.20"]
+        BAS["<b>bastion</b> · LXC 102<br/>tag 10 · 10.10.10.30"]
+        SYS["<b>syslog</b> · LXC 103<br/>tag 10 · 10.10.10.40"]
+        WEB["<b>website</b> · VM 100<br/>tag 40 · 10.10.40.10"]
+        SBX["<b>sandbox-thm</b> · VM 101<br/>tag 50 · 10.10.50.10"]
+    end
 
     NET --- XB6
-    XB6 -->|"yellow"| E1
-
-    subgraph SW["CRS326-24G-2S+IN — RouterOS 7.24.1"]
-        E1
-        E2
-        E3
-        E8
-        EU
-    end
-
-    E2 -->|"blue"| DELL
-    E8 -->|"black"| DESK
-
-    subgraph D["the Dell"]
-        DELL --- HOST
-        DELL --- VM
-        DELL --- SBX
-    end
+    XB6 -->|"🟡 yellow"| E1
+    E2 -->|"🔵 blue"| VMBR
+    E8 -->|"⚫ black"| DESK
+    VMBR --- HOST
+    VMBR --- BAS
+    VMBR --- SYS
+    VMBR --- WEB
+    VMBR --- SBX
 ```
 
-**Note the single blue cable to the Dell.** It carries the host on VLAN 10, the website VM on VLAN 40, and the sandbox VM on VLAN 50 — three segments that cannot reach each other, over one wire. That fact is invisible here and is the whole point of the second diagram.
+**Note the single blue cable to the Dell.** It carries the host on VLAN 10, two containers on VLAN 10, the website on VLAN 40 and the sandbox on VLAN 50 — **four segments that cannot reach each other, over one wire.** That fact is invisible here and is the entire reason for the second diagram.
 
 ### Cable map
 
 | Colour | From | To | Purpose |
 |---|---|---|---|
 | 🟡 Yellow | XB6 LAN | switch **ether1** | WAN uplink — the only cable touching the public internet |
-| 🔵 Blue | Dell `nic0` | switch **ether2** | Trunk — tagged 10/20/30/40 |
+| 🔵 Blue | Dell `nic0` | switch **ether2** | Trunk — tagged 10/20/30/40/50 |
 | ⚫ Black | Desktop | switch **ether8** | Access — VLAN 20 |
 
 **Both ends of every run are labelled** with the same text, including the port number. A label on one end is useless when you are holding the other.
+
+**Three cables. That is the entire physical network.**
+
+### Port map — all 26 interfaces
+
+| Port(s) | Role | VLAN | Frame types | State | Connected to |
+|---|---|---|---|---|---|
+| **ether1** | **Routed** — outside the bridge | — | — | **Up · 1G full** | XB6 |
+| **ether2** | **Trunk** | tagged 10,20,30,40,50 · PVID 99 | tagged only | **Up · 1G full** | Dell `nic0` |
+| ether3 | Trunk | PVID 99 | tagged only | Enabled, no link | *reserved — AP, Phase 4* |
+| ether4–7 | Access | **10 · Management** | untagged | ⚠️ **Enabled, unused** | — |
+| **ether8** | Access | **20 · Trusted** | untagged | **Up · 1G full** | Desktop |
+| ether9–11 | Access | 20 · Trusted | untagged | ⚠️ **Enabled, unused** | — |
+| ether12–15 | Access | 30 · IoT | untagged | ⚠️ **Enabled, unused** | — |
+| ether16–19 | Access | 40 · DMZ | untagged | ⚠️ **Enabled, unused** | — |
+| ether20–24 | Access | 99 · Native | untagged | ✅ Disabled | — |
+| sfp-sfpplus1–2 | **Not bridge members** | — | — | No link | *Phase 4 backbone* |
+
+**⚠️ The rows marked "Enabled, unused" are audit finding 1** — see [audits.md](audits.md). Fifteen live untagged access ports, four of which land in the Management VLAN.
+
+**`ether1` is deliberately not a bridge port.** It holds `10.0.0.2/24` directly, which is what makes it a routed WAN interface rather than a switched one — the RouterOS equivalent of Cisco's `no switchport`.
+
+**All three active links negotiated 1 Gbps full duplex.** No speed or duplex mismatches.
 
 ---
 
@@ -63,14 +87,14 @@ graph TD
 ```mermaid
 graph LR
     WAN([Internet])
-    R{{"CRS326 — router / firewall<br/>NAT + stateful filtering"}}
+    R{{"CRS326<br/>router · firewall<br/>NAT + stateful filtering"}}
 
-    V10["<b>VLAN 10 — Management</b><br/>10.10.10.0/24<br/>Proxmox host"]
-    V20["<b>VLAN 20 — Trusted</b><br/>10.10.20.0/24<br/>Desktop"]
-    V30["<b>VLAN 30 — IoT</b><br/>10.10.30.0/24<br/>empty until Phase 4"]
-    V40["<b>VLAN 40 — DMZ</b><br/>10.10.40.0/24<br/>Website VM"]
-    V50["<b>VLAN 50 — Sandbox</b><br/>10.10.50.0/24<br/>Debian VM, TryHackMe"]
-    V99["<b>VLAN 99 — Native</b><br/>no address, no devices"]
+    V10["<b>VLAN 10 · Management</b><br/>10.10.10.0/24<br/>Proxmox · bastion · syslog"]
+    V20["<b>VLAN 20 · Trusted</b><br/>10.10.20.0/24<br/>Desktop"]
+    V30["<b>VLAN 30 · IoT</b><br/>10.10.30.0/24<br/><i>empty until Phase 4</i>"]
+    V40["<b>VLAN 40 · DMZ</b><br/>10.10.40.0/24<br/>Website VM"]
+    V50["<b>VLAN 50 · Sandbox</b><br/>10.10.50.0/24<br/>TryHackMe workstation"]
+    V99["<b>VLAN 99 · Native</b><br/><i>no address, no devices</i>"]
 
     V10 --- R
     V20 --- R
@@ -83,7 +107,7 @@ graph LR
     V10 -.->|"permitted"| V30
     V10 -.->|"permitted"| V40
     V10 -.->|"permitted"| V50
-    V20 -.->|"TCP 22, 8006<br/>one host only"| V10
+    V20 -.->|"TCP 22 → bastion<br/>TCP 8006 → Proxmox"| V10
 ```
 
 **Solid lines are routed adjacency. Dotted lines are what the firewall permits between segments.** Every pair without a dotted line is dropped by the forward chain's default deny.
@@ -93,24 +117,34 @@ graph LR
 | From ↓ To → | Internet | VLAN 10 | VLAN 20 | VLAN 30 | VLAN 40 | VLAN 50 |
 |---|---|---|---|---|---|---|
 | **10 Management** | ✅ | — | ✅ | ✅ | ✅ | ✅ |
-| **20 Trusted** | ✅ | ⚠️ one host, TCP 22/8006 | — | ❌ | ❌ | ❌ |
+| **20 Trusted** | ✅ | ⚠️ **two host-scoped rules** | — | ❌ | ❌ | ❌ |
 | **30 IoT** | ✅ | ❌ | ❌ | — | ❌ | ❌ |
 | **40 DMZ** | ✅ | ❌ | ❌ | ❌ | — | ❌ |
 | **50 Sandbox** | ✅ | ❌ | ❌ | ❌ | ❌ | — |
 
+**The two host-scoped rules from Trusted**, both from `10.10.20.50` alone:
+
+| Destination | Port | Purpose |
+|---|---|---|
+| `10.10.10.30` — bastion | TCP 22 | **The jump host.** Every other SSH destination goes through it |
+| `10.10.10.20` — Proxmox | TCP 8006 | The web UI, which is impractical to tunnel |
+
+**Narrowed 2026-09-09.** The previous rule permitted the desktop to reach **any** VLAN 10 host on TCP 22.
+
 **The asymmetry is deliberate and is what a stateful firewall buys.** Management reaches every segment; nothing reaches management unbidden. A DMZ host can *answer* when spoken to — its replies match `established/related` — but it cannot *initiate* toward anything internal.
 
-**VLAN 50 is the least trusted segment on the network**, added 2026-09-07. It holds a Debian VM used for TryHackMe, which runs security tooling and terminates a VPN into deliberately vulnerable networks. Its policy is the strictest here — **internet only**, with no path to any other VLAN and no `input`-chain permit to the switch beyond DHCP. Its DHCP hands out Cloudflare rather than the switch as resolver, so even DNS gives it no reason to talk to the router.
-
-**It has no untagged port anywhere in the bridge VLAN table.** Nothing can be plugged into the sandbox — membership requires being a VM on a host already trusted to tag for it. That is also why DHCP is acceptable here while the DMZ deliberately runs static-only: the "unauthorised device gets an address" threat has no physical entry point.
-
-**⚠️ Three things this build taught, all worth keeping:**
-
-- **A VLAN-aware Linux bridge has its own allowed-VLAN list, and it fails silently.** Proxmox's uplink carried `10 20 30 40` and dropped VLAN 50 frames at the host, before the wire. Every switch-side check passed and the fault looked like a MikroTik problem for twenty minutes. **`bridge vlan show` on the hypervisor is the command that finds this**, and it belongs early in the sequence, not late.
-- **RouterOS labels MNDP traffic "discovery" in the sniffer, on UDP 5678.** It looks exactly like DHCP discovery at a glance and is nothing of the kind — it is the switch broadcasting its own presence for Winbox. Read the port numbers, not the label.
-- **The switch's own outbound broadcasts appear on a VLAN interface sniff.** Seeing traffic on `vlan50` therefore proves nothing about the inbound direction, which is the opposite of the conclusion it invites.
-
 **VLAN 99 appears in neither routing nor policy**, because the router has no interface in it. It exists solely so the trunk's native VLAN is not VLAN 1, and it holds no devices — leaving a double-tagging attack nowhere to launch from.
+
+### Management plane
+
+Separate from the data plane above, and easy to overlook when reading the matrix:
+
+| Path | Route | Why |
+|---|---|---|
+| Desktop → **switch** (TCP 22, 8291) | **Direct**, `input` chain | **Recovery path.** Must not depend on a container running on a hypervisor behind the switch |
+| Desktop → **anything on 22** | **Via bastion** | Authenticated, logged, single chokepoint |
+| Bastion / Proxmox → switch | `input`, scoped by the `mgmt-hosts` address list | |
+| **MAC-connect** (Layer 2) | Scoped to `vlan10` and `vlan20` | Layer 2 fallback that survives a broken IP configuration. **The WAN, DMZ and sandbox paths are closed** |
 
 ---
 
@@ -128,6 +162,7 @@ Every cell above was tested rather than inferred:
 | Sandbox → Proxmox host, Sandbox → Desktop | **Dropped** — timeout, not ICMP unreachable |
 | Sandbox → internet and DNS | **Permitted** |
 | Management → Sandbox | **Permitted** — the asymmetry confirmed from both ends |
+| Desktop → syslog collector (`10.10.10.40`) | **Dropped** — confirmed 2026-09-10 by the narrowed rule blocking a host built minutes earlier |
 
 ---
 
