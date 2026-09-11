@@ -66,15 +66,15 @@ graph TD
 | **ether1** | **Routed** — outside the bridge | — | — | **Up · 1G full** | XB6 |
 | **ether2** | **Trunk** | tagged 10,20,30,40,50 · PVID 99 | tagged only | **Up · 1G full** | Dell `nic0` |
 | ether3 | Trunk | PVID 99 | tagged only | Enabled, no link | *reserved — AP, Phase 4* |
-| ether4–7 | Access | **10 · Management** | untagged | ⚠️ **Enabled, unused** | — |
+| ether4–7 | Access | **10 · Management** | untagged | ✅ Disabled | — |
 | **ether8** | Access | **20 · Trusted** | untagged | **Up · 1G full** | Desktop |
-| ether9–11 | Access | 20 · Trusted | untagged | ⚠️ **Enabled, unused** | — |
-| ether12–15 | Access | 30 · IoT | untagged | ⚠️ **Enabled, unused** | — |
-| ether16–19 | Access | 40 · DMZ | untagged | ⚠️ **Enabled, unused** | — |
+| ether9–11 | Access | 20 · Trusted | untagged | ✅ Disabled | — |
+| ether12–15 | Access | 30 · IoT | untagged | ✅ Disabled | — |
+| ether16–19 | Access | 40 · DMZ | untagged | ✅ Disabled | — |
 | ether20–24 | Access | 99 · Native | untagged | ✅ Disabled | — |
 | sfp-sfpplus1–2 | **Not bridge members** | — | — | No link | *Phase 4 backbone* |
 
-**⚠️ The rows marked "Enabled, unused" are audit finding 1** — see [audits.md](audits.md). Fifteen live untagged access ports, four of which land in the Management VLAN.
+**Every unused access port is disabled** — done 2026-09-11 as audit finding 1's remediation. Previously all fifteen were live untagged ports with DHCP waiting, four of them landing in the Management VLAN. Enable one when something needs it.
 
 **`ether1` is deliberately not a bridge port.** It holds `10.0.0.2/24` directly, which is what makes it a routed WAN interface rather than a switched one — the RouterOS equivalent of Cisco's `no switchport`.
 

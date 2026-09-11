@@ -73,6 +73,10 @@ The website VM is the one machine with an inbound path from the internet. Handin
 
 Confirmed as the reason it was found stopped on 2026-09-10. **Worth deciding deliberately rather than leaving implicit** — a sandbox that runs only when in use is defensible, but then a stale ARP entry is expected behaviour rather than a symptom.
 
+#### 6. A dynamic VLAN 1 exists
+
+`added by pvid` — `bridge1` itself carries PVID 1, so VLAN 1 exists with the bridge untagged in it. Harmless, and inconsistent with native VLAN 99 everywhere else.
+
 #### 7. The hypervisor has an unused wireless interface
 
 `lldpcli show interfaces` surfaced **`wlo1`** on the Dell, with the chassis advertising `Capability: Wlan, on`.
@@ -88,10 +92,6 @@ wlo1  DOWN  ac:67:5d:0e:2d:74  <BROADCAST,MULTICAST>
 **Recorded as latent rather than closed.** "Nobody configured it" is a weaker guarantee than "it cannot come up" — the same reasoning being applied to fifteen unused switch ports applies to an unused radio in the machine running every service.
 
 **Remediation:** disable the WLAN radio in the BIOS, bundled with the pending `e1000e` firmware update and the AC Power Recovery setting the UPS shutdown test needs. Three things, one trip to the machine. Blacklisting the kernel module is the software alternative.
-
-#### 6. A dynamic VLAN 1 exists
-
-`added by pvid` — `bridge1` itself carries PVID 1, so VLAN 1 exists with the bridge untagged in it. Harmless, and inconsistent with native VLAN 99 everywhere else.
 
 ### Documentation drift found
 
@@ -116,7 +116,7 @@ An audit listing only problems misrepresents the system. These were checked and 
 
 ### Action items
 
-- [x] **Disable unused access ports** — `ether4-7`, `ether9-19`
+- [x] **Disable unused access ports** — done 2026-09-11. `ether4-7` and `ether9-19` disabled; `ether1`, `ether2`, `ether3` and `ether8` verified still up
 - [x] **Scope neighbour discovery** to an interface list of `vlan10` and `vlan20`
 - [x] ~~Install `lldpd` on Proxmox~~ — **attempted and reversed.** Incompatible with the trunk, and it leaked hypervisor details to the DMZ and sandbox. See finding 3
 - [ ] **Disable the Dell's WLAN radio in the BIOS** — with the `e1000e` firmware update and AC Power Recovery, in one visit
