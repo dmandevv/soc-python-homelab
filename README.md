@@ -153,6 +153,23 @@ This is simpler than the VLAN-trunk fallback it replaces: WAN traffic terminates
 
 **Together with RA Guard, that is the full set:** rogue routers, rogue IPv4 servers, rogue IPv6 servers.
 
+### DNS over HTTPS — upstream only
+
+**Encrypt the switch's own lookups from the ISP, while keeping local queries visible.**
+
+```
+/ip dns set use-doh-server=https://cloudflare-dns.com/dns-query verify-doh-cert=yes
+```
+
+```
+clients → switch     plain DNS, visible and loggable here
+switch  → internet   DoH, opaque to the ISP
+```
+
+**⚠️ Do not enable DoH on clients.** A desktop pointed at a public DoH resolver bypasses `10.10.x.1` entirely, and the queries stop being visible — which is the opposite of the Phase 3 logged-resolver plan. **DNS is the richest detection signal on the network; encrypting it away from yourself is a loss, not a gain.** Encrypting it from the ISP is the part worth having.
+
+**⚠️ It fails closed.** `verify-doh-cert=yes` requires the CA certificate imported into `/certificate` first — without it, resolution stops entirely rather than falling back. Import and verify before relying on it.
+
 ### Prove the UPS actually shuts the host down — added 2026-09-09
 
 **NUT reads the UPS and is configured to halt the host, and that path has never fired.** Verified 2026-09-09: `upsc` returns full data, `upsmon.conf` carries a valid `MONITOR` line with `SHUTDOWNCMD` and `MODE=standalone`, and the service is enabled and running. **All of that proves it can read a UPS. None of it proves it will shut anything down.**
