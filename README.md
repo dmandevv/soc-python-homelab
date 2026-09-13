@@ -272,7 +272,54 @@ What to confirm afterwards:
 
 **logrotate renames; it does not move the writer.** A file descriptor follows the **inode**, not the name, so without the `postrotate` signal rsyslog keeps writing into the archive and the new log stays empty forever. Silent, and one of the most common log-pipeline failures there is.
 
-**Still to do:** only the switch ships logs. Proxmox, the VMs, the bastion and the sandbox do not yet. **And the collector cannot alert on its own full disk** — the alert would go to itself. That check belongs somewhere else.
+### Log integrity and detections — added 2026-09-12
+
+**The collector was trusting the senders.** `%HOSTNAME%` is a plain-text field *inside* the syslog message, chosen by whoever sent it — so the original per-host template let any sender write into any device's log file. Proven by injecting a message from the bastion carrying the switch's hostname; it filed obediently into `switch.log`.
+
+**Rebound so the unforgeable part decides the path:**
+
+```
+/var/log/remote/%FROMHOST-IP%/%HOSTNAME%.log
+```
+
+`%FROMHOST-IP%` comes from the socket, not the message. **The impersonation still succeeds — it can no longer hide.** A liar is confined to its own IP's directory, and the lie survives as a filename instead of being merged into the truth.
+
+**Three rules now run against this**, documented properly in [detections.md](detections.md):
+
+| Rule | Detects | Runs on |
+|---|---|---|
+| **DET-001** `syslog-sentry` | A sender using another host's name | Collector, cron |
+| **DET-002** `syslog-heartbeat` | A sender that has gone silent | Collector, cron |
+| **DET-003** `netwatch` | The collector no longer accepting on 514 | **The switch** |
+
+**DET-003 lives on the switch on purpose. Nothing can monitor its own death** — if the collector fails, every rule running on it fails silently. The switch watches the collector and the collector watches the switch, so **neither vouches for itself.**
+
+**⚠️ `logger -p security.warning` does not land in `/var/log/syslog`.** `security` aliases to `auth`, and Debian's stock rsyslog routes `auth` to `auth.log` while explicitly excluding it from the catch-all. **The facility is routing, not a label** — detections now use `auth`, health checks `local0`, so the two separate without grepping.
+
+### Senders — ✅ switch, ✅ Proxmox, ✅ bastion
+
+**Proxmox had no rsyslog at all** — recent PVE logs through systemd-journald alone. Installed rather than using `systemd-journal-upload`, because **the switch speaks syslog and nothing else**, and every sender converging on one protocol is the entire value of having a collector.
+
+Forwarded with a durable queue rather than the one-line shorthand:
+
+```
+*.* action(type="omfwd" target="10.10.10.40" port="514" protocol="tcp"
+           action.resumeRetryCount="-1"
+           queue.type="linkedList" queue.size="10000"
+           queue.saveOnShutdown="on")
+```
+
+**The queue is the part that matters.** Without it, forwarding is synchronous — an unreachable collector can stall the logging path on the machine running every service in the lab. **A monitoring system must never be able to take down what it monitors.** 10,000 messages buys well over a day of collector downtime with nothing lost.
+
+**Local plaintext logs deliberately left enabled on the hypervisor**, despite duplicating the journal on disk. The 2026-09-08 incident is the argument: every log needed to diagnose it lived on the box that could not be reached.
+
+**The bastion was the highest-value addition.** Every SSH session in the lab crosses it, and those records previously existed only on the container an attacker would be sitting in. **A login record stored on the machine being logged into is evidence the attacker controls.** `Accepted publickey for dan from 10.10.20.50 ... ED25519 SHA256:...` now lands off-box within a second, key fingerprint included — which is how a retired key still being accepted would be spotted.
+
+**⚠️ Containers cannot produce kernel logs.** `imklog` fails in an unprivileged LXC because `/proc/kmsg` is the **host's** ring buffer and access is denied by design — the container boundary working, not a misconfiguration. The module is disabled on the container senders. **Proxmox is the only machine that can ship kernel messages**, which is exactly where the 2026-09-08 `e1000e` hang warnings would have gone had this existed.
+
+**⚠️ `sudo cat > /etc/...` fails even as root.** The redirect is performed by the *calling* shell before `sudo` runs, so the file is opened as the unprivileged user. `sudo tee` is the fix — it receives the content on stdin and does the writing itself.
+
+**Still to do:** the website VM and the sandbox do not ship yet. **They are the harder case** — they sit in the DMZ and sandbox VLANs, so shipping to VLAN 10 means opening a path from untrusted segments into management, which the firewall currently denies in both directions. **That is a policy decision, not a configuration step.**
 
 ### A resolver we control and log — wanted 2026-09-09
 

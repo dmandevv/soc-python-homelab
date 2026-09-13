@@ -80,3 +80,65 @@ Verified all three read `off`. Moves segmentation from the NIC to the CPU — a 
 **Counting by day changed the severity.** 196 hang messages looked like weeks of chronic failure. Grouping them by date — `grep ... | awk '{print $1,$2}' | sort | uniq -c` — showed all 196 fell on one day. **One event, not a failing NIC.** The raw count invited the wrong conclusion; the distribution corrected it.
 
 **A hypothesis that fits is not a cause.** A long-running OpenVPN tunnel is a plausible trigger and remains unproven. The mitigation was applied because it addresses the mechanism regardless of which trigger was real — which is the right move when you have one event and several candidate explanations.
+
+---
+
+## 2026-09-11 — Intermittent WAN outages, and a monitor that could only fail
+
+**Severity:** internet through the switch appeared to drop for ~3 minutes roughly every 15 minutes. Local inter-VLAN traffic was unaffected throughout.
+
+### Summary
+
+**The outages were real. The data used to characterise them was not.** The monitoring script written to measure the fault ran `ping` inside an unprivileged LXC container, which cannot open raw sockets — so **every sample returned FAIL regardless of the state of the network.** Roughly an hour of investigation was spent on readings that carried no information.
+
+Rebuilt with a working check, the pattern did not reproduce. A controlled test then cleared the change that had been the leading suspect.
+
+### Timeline
+
+| Time | Event |
+|---|---|
+| **~15:00** | A batch of Phase 2 changes lands: RA Guard, DHCP and DHCPv6 snooping, neighbour-discovery scoping, fifteen unused ports disabled, `bridge1` PVID moved to 99 |
+| **~16:00** | Outages reported. **The correlation with the change window is what drove everything that followed** |
+| — | `wanwatch` written on the bastion, `ping`-based. Every reading FAIL |
+| — | **Recognised as the container capability problem** — `ping` needs `CAP_NET_RAW`, absent in an unprivileged container. The identical issue had been hit on the sandbox VM two days earlier |
+| — | Replaced with a TCP connect test using the bash `/dev/tcp` builtin, which needs no capability. `/tool netwatch` added on the switch against `10.0.0.1`, logging to the collector |
+| — | DHCP snooping disabled. **Clean baseline hour — no failures from either sensor** |
+| **17:58:50** | **`dhcp-snooping=yes` restored, IPv4 only.** Instrumentation untouched |
+| **+1h** | **Clean. No failures.** `dhcpv6-snooping` re-enabled after |
+
+### Root cause
+
+**Not determined, and deliberately left that way.** The fault did not recur once measurement was working. ISP maintenance was known to be active in the area during the same window and is the remaining explanation. **Nothing changed on the switch fixed it, and nothing changed on the switch caused it.**
+
+**What *was* determined:** DHCP snooping is not responsible. Disabling it produced a clean hour; re-enabling it produced another. An off-and-on-again result is evidence in a way that "it stopped happening" never is.
+
+### Why the monitor failed the way it did
+
+```
+ping -c1 -W2 10.0.0.1   # unprivileged LXC → always fails
+```
+
+**A check that cannot succeed is indistinguishable from a total outage.** It produced a plausible-looking log of continuous failure, which fitted the reported symptom closely enough that it was believed. Had it been *noisy* it would have been questioned; being *consistent* made it convincing.
+
+The replacement needs no privilege at all:
+
+```
+timeout 2 bash -c "</dev/tcp/10.0.0.1/53" && echo OK || echo FAIL
+```
+
+### Action items
+
+- [x] **Rebuild the monitor without `ping`** — done. `/dev/tcp` connect test
+- [x] **Add a second, independent sensor** — done. `/tool netwatch` on the switch, shipping to the syslog collector. Two sensors on different devices disagreeing is itself a finding
+- [x] **Clear DHCP snooping by controlled test** — done 2026-09-11
+- [ ] **Make the capability limit a standing check.** Anything written for an unprivileged container gets tested against a known-good *and* a known-bad target before its output is trusted
+
+### Lessons
+
+**Verify a monitor against both outcomes before believing it.** This one was never shown a working network, so its failure mode was never exercised. **Point a new check at something known good and something known broken — if it cannot tell them apart, it is not a check.**
+
+**The same mistake twice in three days.** The capability limit had already been hit on the sandbox. Knowing a constraint is not the same as remembering it in the moment the constraint applies, which is the argument for writing it down where the next script gets written rather than only in an incident log.
+
+**Correlation with a change window is a strong prior and not a conclusion.** Five things changed an hour before the symptom appeared, and it was reasonable to suspect them. It was not reasonable to stop there — the controlled off/on test took an hour and turned a suspicion into a cleared suspect.
+
+**Absence of a cause is a legitimate outcome.** No fault was found because, by the time the instruments worked, no fault was present. Writing "not determined, ISP maintenance concurrent" is more honest than attributing it to whichever change is most convenient.
